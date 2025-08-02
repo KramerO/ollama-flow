@@ -34,7 +34,7 @@ export class Orchestrator {
       ollamaAgents.push(agent);
     }
 
-    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
+    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen', architectureType);
     this.registerAgent(queenAgent);
 
     if (architectureType === 'HIERARCHICAL') {
