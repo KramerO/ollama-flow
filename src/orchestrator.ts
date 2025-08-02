@@ -1,6 +1,6 @@
 
-import type { Agent, AgentMessage, ArchitectureType } from './agent.ts';
-import { BaseAgent } from './agent.ts';
+import type { Agent, ArchitectureType } from './agent.ts';
+import { BaseAgent, type AgentMessage } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 import { QueenAgent } from './queenAgent.ts';
 import { SubQueenAgent } from './subQueenAgent.ts';

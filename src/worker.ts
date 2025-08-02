@@ -1,6 +1,6 @@
 
 import ollama from 'ollama';
-import { AgentMessage, BaseAgent } from './agent.ts';
+import { type AgentMessage, BaseAgent } from './agent.ts';
 
 export class OllamaAgent extends BaseAgent {
   private model: string;

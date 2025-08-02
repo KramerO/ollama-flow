@@ -1,4 +1,4 @@
-import { AgentMessage, BaseAgent } from './agent.ts';
+import { BaseAgent, type AgentMessage } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 
 export class SubQueenAgent extends BaseAgent {
