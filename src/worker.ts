@@ -16,8 +16,7 @@ export class OllamaAgent extends BaseAgent {
     try {
       const result = await this.performTask(message.content);
       console.log(`Agent ${this.name} (${this.id}) completed task with result: ${result}`);
-      // In a centralized architecture, always send response back to the QueenAgent
-      await this.sendMessage('queen-agent-1', 'response', result);
+      await this.sendMessage(message.senderId, 'response', result);
     } catch (error) {
       console.error(`Agent ${this.name} (${this.id}) failed to perform task:`, error);
       await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error.message}`);

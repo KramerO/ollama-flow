@@ -17,7 +17,7 @@ export class SubQueenAgent extends BaseAgent {
   async receiveMessage(message: AgentMessage): Promise<void> {
     console.log(`SubQueenAgent ${this.name} (${this.id}) received message from ${message.senderId}: ${message.content}`);
 
-    if (message.type === 'task') {
+    if (message.type === 'sub-task-to-subqueen') {
       if (this.groupOllamaAgents.length === 0) {
         console.warn(`SubQueenAgent ${this.name}: No OllamaAgents in group to delegate tasks.`);
         // Optionally, send an error back to the sender (Main Queen)
