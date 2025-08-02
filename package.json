@@ -1,0 +1,30 @@
+{
+  "name": "ollama-flow",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ollama-flow": "dist/index.js"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "start:server": "ts-node src/server.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@types/express": "^5.0.3",
+    "commander": "^14.0.0",
+    "express": "^5.1.0",
+    "ollama": "^0.5.16"
+  }
+}
