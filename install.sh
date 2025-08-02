@@ -8,7 +8,8 @@ then
 fi
 if ! command -v npm &> /dev/null
 then
-    echo "npm is not installed. Please install Node.js from https://nodejs.org/ and try again."
+    echo "npm ist nicht installiert. Dies sollte mit Node.js installiert werden. Bitte lade Node.js von https://nodejs.org/ herunter und installiere es manuell."
+    echo "Nach der Installation starte dieses Skript erneut."
     exit 1
 fi
 echo "Node.js and npm are installed."

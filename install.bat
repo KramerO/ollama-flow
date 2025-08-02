@@ -8,7 +8,8 @@ if %errorlevel% neq 0 (
 )
 where npm >nul 2>nul
 if %errorlevel% neq 0 (
-    echo npm is not installed. Please install Node.js from https://nodejs.org/ and try again.
+    echo npm ist nicht installiert. Dies sollte mit Node.js installiert werden. Bitte lade Node.js von https://nodejs.org/ herunter und installiere es manuell.
+    echo Nach der Installation starte dieses Skript erneut.
     pause
     exit /b 1
 )
