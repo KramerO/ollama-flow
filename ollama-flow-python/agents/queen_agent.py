@@ -4,6 +4,8 @@ import json
 from typing import List, Type, Optional
 
 from agents.base_agent import BaseAgent, AgentMessage
+from agents.sub_queen_agent import SubQueenAgent
+from agents.worker_agent import WorkerAgent
 
 class QueenAgent(BaseAgent):
     def __init__(self, agent_id: str, name: str, architecture_type: str, model: str = "llama3"):
@@ -82,7 +84,7 @@ class QueenAgent(BaseAgent):
 
         elif message.message_type == "group-response":
             print(f"QueenAgent received group response from {message.sender_id}: {message.content}")
-            await self.send_message("orchestrator", "final-response", f"Aggregated response from {message.content["from_sub_queen"]}: {message.content["content"]}", message.request_id)
+            await self.send_message("orchestrator", "final-response", f"Aggregated response from {message.content['from_sub_queen']}: {message.content['content']}", message.request_id)
         elif message.message_type == "response":
             print(f"QueenAgent received direct response from {message.sender_id}: {message.content}")
             await self.send_message("orchestrator", "final-response", f"Response from {message.sender_id}: {message.content}", message.request_id)
