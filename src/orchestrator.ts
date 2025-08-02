@@ -1,5 +1,5 @@
 
-import { Worker } from './worker';
+import { Worker } from './worker.ts';
 
 export class Orchestrator {
   private worker: Worker;
