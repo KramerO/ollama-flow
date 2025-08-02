@@ -5,9 +5,9 @@ import { type AgentMessage, BaseAgent } from './agent.ts';
 export class OllamaAgent extends BaseAgent {
   private model: string;
 
-  constructor(id: string, name: string, model: string = 'llama3') {
+  constructor(id: string, name: string, model?: string) {
     super(id, name);
-    this.model = model;
+    this.model = model || 'llama3'; // Use provided model or default to 'llama3'
   }
 
   async receiveMessage(message: AgentMessage): Promise<void> {

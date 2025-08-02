@@ -50,6 +50,30 @@ app.post('/set_project_folder', (req, res) => {
   }
 });
 
+app.get('/get_ollama_models', async (req, res) => {
+  try {
+    const models = await orchestrator.getOllamaModels();
+    res.json({ models });
+  } catch (error) {
+    console.error('Error getting Ollama models:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/set_ollama_model', (req, res) => {
+  const { modelName } = req.body;
+  if (!modelName) {
+    return res.status(400).send('modelName is required');
+  }
+  try {
+    orchestrator.setCurrentOllamaModel(modelName);
+    res.json({ message: `Ollama model set to ${modelName}` });
+  } catch (error) {
+    console.error('Error setting Ollama model:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Ollama Flow server listening at http://localhost:${port}`);
 });

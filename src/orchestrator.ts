@@ -4,11 +4,13 @@ import { BaseAgent, type AgentMessage } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 import { QueenAgent } from './queenAgent.ts';
 import { SubQueenAgent } from './subQueenAgent.ts';
+import ollama from 'ollama';
 
 export class Orchestrator {
   private agents: Map<string, Agent>;
   private currentArchitecture: ArchitectureType;
   private projectFolderPath: string | null = null;
+  private currentOllamaModel: string = 'llama3'; // Default Ollama model
 
   constructor() {
     this.agents = new Map<string, Agent>();
@@ -21,6 +23,23 @@ export class Orchestrator {
     console.log(`Project folder path set to: ${this.projectFolderPath}`);
   }
 
+  setCurrentOllamaModel(model: string): void {
+    this.currentOllamaModel = model;
+    console.log(`Current Ollama model set to: ${this.currentOllamaModel}`);
+    // Reconfigure agents to use the new model if needed
+    this.reconfigureAgents(this.currentArchitecture, this.getAgentsByType(OllamaAgent).length);
+  }
+
+  async getOllamaModels(): Promise<string[]> {
+    try {
+      const response = await ollama.list();
+      return response.models.map(model => model.name);
+    } catch (error) {
+      console.error('Error listing Ollama models:', error);
+      return [];
+    }
+  }
+
   reconfigureAgents(architectureType: ArchitectureType, workerCount: number): void {
     console.log(`Reconfiguring agents for architecture: ${architectureType} with ${workerCount} workers.`);
     this.agents.clear(); // Clear existing agents
@@ -30,7 +49,7 @@ export class Orchestrator {
 
     const ollamaAgents: OllamaAgent[] = [];
     for (let i = 0; i < workerCount; i++) {
-      const agent = new OllamaAgent(`ollama-agent-${i + 1}`, `Ollama Worker ${i + 1}`);
+      const agent = new OllamaAgent(`ollama-agent-${i + 1}`, `Ollama Worker ${i + 1}`, this.currentOllamaModel);
       ollamaAgents.push(agent);
     }
 
