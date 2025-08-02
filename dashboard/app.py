@@ -9,7 +9,27 @@ OLLAMA_FLOW_SERVER_URL = "http://localhost:3000"
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    ollama_models = []
+    try:
+        response = requests.get(f"{OLLAMA_FLOW_SERVER_URL}/get_ollama_models")
+        response.raise_for_status()
+        ollama_models = response.json().get('models', [])
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Ollama models: {e}")
+
+    return render_template('index.html', ollama_models=ollama_models)
+
+@app.route('/set_ollama_model', methods=['POST'])
+def set_ollama_model():
+    model_name = request.form['ollama_model_name']
+    try:
+        response = requests.post(f"{OLLAMA_FLOW_SERVER_URL}/set_ollama_model", json={'modelName': model_name})
+        response.raise_for_status()
+        message = response.json().get('message', f'Ollama model set to {model_name}.')
+        return render_template('index.html', ollama_model_message=message)
+    except requests.exceptions.RequestException as e:
+        error_message = f"Error setting Ollama model: {e}"
+        return render_template('index.html', ollama_model_error=error_message)
 
 @app.route('/run_prompt', methods=['POST'])
 def run_prompt():
