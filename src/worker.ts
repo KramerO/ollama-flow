@@ -1,13 +1,17 @@
 
 import ollama from 'ollama';
 import { type AgentMessage, BaseAgent } from './agent.ts';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 export class OllamaAgent extends BaseAgent {
   private model: string;
+  private projectFolderPath: string | null;
 
-  constructor(id: string, name: string, model?: string) {
+  constructor(id: string, name: string, model?: string, projectFolderPath: string | null = null) {
     super(id, name);
     this.model = model || 'llama3'; // Use provided model or default to 'llama3'
+    this.projectFolderPath = projectFolderPath;
   }
 
   async receiveMessage(message: AgentMessage): Promise<void> {
@@ -16,7 +20,29 @@ export class OllamaAgent extends BaseAgent {
     try {
       const result = await this.performTask(message.content);
       console.log(`Agent ${this.name} (${this.id}) completed task with result: ${result}`);
-      await this.sendMessage(message.senderId, 'response', result);
+
+      let saveMessage = '';
+      const saveMatch = message.content.match(/speichere sie als (\S+)/i);
+      if (saveMatch && this.projectFolderPath) {
+        const filename = saveMatch[1];
+        const fullPath = path.join(this.projectFolderPath, filename);
+        
+        // Extract code block from the result
+        const codeBlockMatch = result.match(/```[\s\S]*?\n([\s\S]*?)\n```/);
+        const codeContent = codeBlockMatch ? codeBlockMatch[1] : result; // Use full result if no code block found
+
+        try {
+          await fs.mkdir(this.projectFolderPath, { recursive: true });
+          await fs.writeFile(fullPath, codeContent);
+          saveMessage = `\nFile saved to: ${fullPath}`;
+          console.log(saveMessage);
+        } catch (fileError) {
+          saveMessage = `\nError saving file to ${fullPath}: ${fileError instanceof Error ? fileError.message : String(fileError)}`;
+          console.error(saveMessage);
+        }
+      }
+
+      await this.sendMessage(message.senderId, 'response', result + saveMessage);
     } catch (error) {
       console.error(`Agent ${this.name} (${this.id}) failed to perform task:`, error);
       await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error instanceof Error ? error.message : String(error)}`);

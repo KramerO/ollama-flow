@@ -51,7 +51,7 @@ export class Orchestrator {
 
     const ollamaAgents: OllamaAgent[] = [];
     for (let i = 0; i < workerCount; i++) {
-      const agent = new OllamaAgent(`ollama-agent-${i + 1}`, `Ollama Worker ${i + 1}`, this.currentOllamaModel);
+      const agent = new OllamaAgent(`ollama-agent-${i + 1}`, `Ollama Worker ${i + 1}`, this.currentOllamaModel, this.projectFolderPath);
       ollamaAgents.push(agent);
     }
 
