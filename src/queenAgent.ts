@@ -87,12 +87,12 @@ export class QueenAgent extends BaseAgent {
 
           const delegatedTask = `Delegated task from Main Queen to ${targetSubQueen.name}: ${subtask}`;
           console.log(`QueenAgent delegating task to ${targetSubQueen.name} (${targetSubQueen.id})`);
-          await this.sendMessage(targetSubQueen.id, 'sub-task-to-subqueen', delegatedTask);
+          await this.sendMessage(targetSubQueen.id, 'sub-task-to-subqueen', delegatedTask, message.requestId);
         } else if (this.architectureType === 'CENTRALIZED' || this.architectureType === 'FULLY_CONNECTED') {
           if (this.ollamaAgents.length === 0) {
             console.warn('No OllamaAgents available to delegate tasks.');
             // Send error back to orchestrator if no ollama agents
-            await this.sendMessage('orchestrator', 'final-error', 'No OllamaAgents available.');
+            await this.sendMessage('orchestrator', 'final-error', 'No OllamaAgents available.', message.requestId);
             return;
           }
 
@@ -102,27 +102,27 @@ export class QueenAgent extends BaseAgent {
 
           if (!targetOllamaAgent) {
             console.error('No valid OllamaAgent found for delegation.');
-            await this.sendMessage('orchestrator', 'final-error', 'No valid OllamaAgent found.');
+            await this.sendMessage('orchestrator', 'final-error', 'No valid OllamaAgent found.', message.requestId);
             return;
           }
 
           const delegatedTask = `Delegated task from Queen to ${targetOllamaAgent.name}: ${subtask}`;
           console.log(`QueenAgent delegating task to ${targetOllamaAgent.name} (${targetOllamaAgent.id})`);
-          await this.sendMessage(targetOllamaAgent.id, 'sub-task', delegatedTask);
+          await this.sendMessage(targetOllamaAgent.id, 'sub-task', delegatedTask, message.requestId);
         }
       }
     } else if (message.type === 'group-response') {
       console.log(`QueenAgent received group response from ${message.senderId}: ${JSON.stringify(message.content)}`);
       // Process the response from the SubQueenAgent
       // For now, just forward it as a final response to the orchestrator
-      await this.sendMessage('orchestrator', 'final-response', `Aggregated response from ${message.content.fromSubQueen}: ${message.content.content}`);
+      await this.sendMessage('orchestrator', 'final-response', `Aggregated response from ${message.content.fromSubQueen}: ${message.content.content}`, message.requestId);
     } else if (message.type === 'response') {
       // This is a direct response from an OllamaAgent in CENTRALIZED or FULLY_CONNECTED
       console.log(`QueenAgent received direct response from ${message.senderId}: ${message.content}`);
-      await this.sendMessage('orchestrator', 'final-response', `Response from ${message.senderId}: ${message.content}`);
+      await this.sendMessage('orchestrator', 'final-response', `Response from ${message.senderId}: ${message.content}`, message.requestId);
     } else if (message.type === 'error') {
       console.error(`QueenAgent received error from ${message.senderId}: ${message.content}`);
-      await this.sendMessage('orchestrator', 'final-error', `Error from ${message.senderId}: ${message.content}`);
+      await this.sendMessage('orchestrator', 'final-error', `Error from ${message.senderId}: ${message.content}`, message.requestId);
     }
   }
 }

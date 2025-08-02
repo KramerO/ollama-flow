@@ -13,6 +13,7 @@ export class Orchestrator {
   private currentOllamaModel: string = 'llama3'; // Default Ollama model
   private responseResolvers: Map<string, (value: string | PromiseLike<string>) => void> = new Map();
   private responseRejecters: Map<string, (reason?: any) => void> = new Map();
+  private currentRequestId: number = 0;
 
   constructor() {
     this.agents = new Map<string, Agent>();
@@ -20,7 +21,7 @@ export class Orchestrator {
     this.reconfigureAgents(this.currentArchitecture, parseInt(process.env.OLLAMA_WORKER_COUNT || '', 10) || 4);
   }
 
-  setProjectFolder(path: string): void {
+  setProjectFolder(path: string | null): void {
     this.projectFolderPath = path;
     console.log(`Project folder path set to: ${this.projectFolderPath}`);
   }
@@ -55,7 +56,7 @@ export class Orchestrator {
       ollamaAgents.push(agent);
     }
 
-    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen', architectureType);
+    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen', architectureType, this.currentOllamaModel);
     this.registerAgent(queenAgent);
 
     if (architectureType === 'HIERARCHICAL') {
@@ -107,29 +108,30 @@ export class Orchestrator {
   }
 
   async dispatchMessage(message: AgentMessage): Promise<void> {
-    console.log(`[Orchestrator.dispatchMessage] Received message. Sender: ${message.senderId}, Receiver: ${message.receiverId}, Type: ${message.type}`);
+    console.log(`[Orchestrator.dispatchMessage] Received message. Sender: ${message.senderId}, Receiver: ${message.receiverId}, Type: ${message.type}, RequestId: ${message.requestId}`);
 
     if (message.receiverId === 'orchestrator') {
-      console.log(`[Orchestrator.dispatchMessage] Handling message for orchestrator. Type: ${message.type}, Sender: ${message.senderId}`);
+      console.log(`[Orchestrator.dispatchMessage] Handling message for orchestrator. Type: ${message.type}, Sender: ${message.senderId}, RequestId: ${message.requestId}`);
+      const requestId = message.requestId || message.senderId; // Use message.requestId if available, otherwise senderId
       if (message.type === 'final-response') {
-        const resolve = this.responseResolvers.get(message.senderId);
-        console.log(`[Orchestrator.dispatchMessage] Found resolver for ${message.senderId}: ${!!resolve}`);
+        const resolve = this.responseResolvers.get(requestId);
+        console.log(`[Orchestrator.dispatchMessage] Found resolver for ${requestId}: ${!!resolve}`);
         if (resolve) {
           resolve(message.content);
-          this.responseResolvers.delete(message.senderId);
-          this.responseRejecters.delete(message.senderId);
+          this.responseResolvers.delete(requestId);
+          this.responseRejecters.delete(requestId);
         } else {
-          console.warn(`[Orchestrator.dispatchMessage] No resolver found for sender ${message.senderId}.`);
+          console.warn(`[Orchestrator.dispatchMessage] No resolver found for requestId ${requestId}.`);
         }
       } else if (message.type === 'final-error') {
-        const reject = this.responseRejecters.get(message.senderId);
-        console.log(`[Orchestrator.dispatchMessage] Found rejecter for ${message.senderId}: ${!!reject}`);
+        const reject = this.responseRejecters.get(requestId);
+        console.log(`[Orchestrator.dispatchMessage] Found rejecter for ${requestId}: ${!!reject}`);
         if (reject) {
           reject(new Error(message.content));
-          this.responseResolvers.delete(message.senderId);
-          this.responseRejecters.delete(message.senderId);
+          this.responseResolvers.delete(requestId);
+          this.responseRejecters.delete(requestId);
         } else {
-          console.warn(`[Orchestrator.dispatchMessage] No rejecter found for sender ${message.senderId}.`);
+          console.warn(`[Orchestrator.dispatchMessage] No rejecter found for requestId ${requestId}.`);
         }
       }
       return; // Message handled by orchestrator
@@ -168,16 +170,18 @@ export class Orchestrator {
         targetReceiverId = 'queen-agent-1'; // Fallback
     }
 
+    const requestId = `request-${this.currentRequestId++}`; // Generate unique request ID
     const initialMessage: AgentMessage = {
       senderId: 'orchestrator',
       receiverId: targetReceiverId,
       type: 'task',
       content: prompt,
+      requestId: requestId,
     };
 
     return new Promise<string>(async (resolve, reject) => {
-      this.responseResolvers.set(targetReceiverId, resolve);
-      this.responseRejecters.set(targetReceiverId, reject);
+      this.responseResolvers.set(requestId, resolve);
+      this.responseRejecters.set(requestId, reject);
       await this.dispatchMessage(initialMessage);
     });
   }

@@ -55,7 +55,7 @@ export class SubQueenAgent extends BaseAgent {
       for (const subtask of subtasks) {
         if (this.groupOllamaAgents.length === 0) {
           console.warn(`SubQueenAgent ${this.name}: No OllamaAgents in group to delegate tasks.`);
-          await this.sendMessage(message.senderId, 'error', `No OllamaAgents in group for ${this.name}`);
+          await this.sendMessage(message.senderId, 'error', `No OllamaAgents in group for ${this.name}`, message.requestId);
           return;
         }
 
@@ -65,13 +65,13 @@ export class SubQueenAgent extends BaseAgent {
 
         if (!targetAgent) {
           console.error('No valid OllamaAgent found in group for delegation.');
-          await this.sendMessage(message.senderId, 'error', 'No valid OllamaAgent found in group.');
+          await this.sendMessage(message.senderId, 'error', 'No valid OllamaAgent found in group.', message.requestId);
           return;
         }
 
         const delegatedTask = `Delegated by ${this.name} to ${targetAgent.name}: ${subtask}`;
         console.log(`SubQueenAgent ${this.name} delegating task to ${targetAgent.name} (${targetAgent.id})`);
-        await this.sendMessage(targetAgent.id, 'sub-task', delegatedTask);
+        await this.sendMessage(targetAgent.id, 'sub-task', delegatedTask, message.requestId);
       }
     } else if (message.type === 'response' || message.type === 'error') {
       console.log(`SubQueenAgent ${this.name} received ${message.type} from ${message.senderId}: ${message.content}`);
@@ -82,7 +82,7 @@ export class SubQueenAgent extends BaseAgent {
         originalSender: message.senderId,
         type: message.type,
         content: message.content,
-      });
+      }, message.requestId);
     }
   }
 }

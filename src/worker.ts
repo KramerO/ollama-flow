@@ -1,4 +1,3 @@
-
 import ollama from 'ollama';
 import { type AgentMessage, BaseAgent } from './agent.ts';
 import * as fs from 'fs/promises';
@@ -23,17 +22,26 @@ export class OllamaAgent extends BaseAgent {
 
       let saveMessage = '';
       const saveMatch = message.content.match(/(?:speichere sie (?:im Projektordner )?unter|speichere sie als)\s+(.+?)(?:\s+ab)?$/i);
-      if (saveMatch && this.projectFolderPath) {
+      console.log(`[OllamaAgent] saveMatch: ${saveMatch}, projectFolderPath: ${this.projectFolderPath}`);
+      const shouldSave = saveMatch !== null && this.projectFolderPath !== null;
+      console.log(`[OllamaAgent] shouldSave: ${shouldSave}`);
+      if (shouldSave) {
         let targetPath = saveMatch[1].trim();
+        console.log(`[OllamaAgent] Extracted targetPath: ${targetPath}`);
         let fullPath: string;
 
         // Check if the extracted path is absolute
         if (path.isAbsolute(targetPath)) {
           fullPath = targetPath;
-        } else {
+        } else if (this.projectFolderPath) {
           // If relative, join with project folder path
           fullPath = path.join(this.projectFolderPath, targetPath);
+        } else {
+          // Fallback if projectFolderPath is null and targetPath is relative
+          console.warn(`[OllamaAgent] Cannot save file: projectFolderPath is null and targetPath (${targetPath}) is relative.`);
+          return; // Exit the function if we can't construct a full path
         }
+        console.log(`[OllamaAgent] Constructed fullPath: ${fullPath}`);
         
         // Extract code block from the result
         const codeBlockMatch = result.match(/```[\s\S]*?\n([\s\S]*?)\n```/);
@@ -43,10 +51,10 @@ export class OllamaAgent extends BaseAgent {
         console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${contentToWrite.length}`);
         try {
           const dirName = path.dirname(fullPath);
+          console.log(`[OllamaAgent] Directory to create: ${dirName}`);
           await fs.mkdir(dirName, { recursive: true });
           await fs.writeFile(fullPath, contentToWrite);
-          saveMessage = `
-File saved to: ${fullPath}`;
+          saveMessage = `\nFile saved to: ${fullPath}`;
           console.log(saveMessage);
         } catch (fileError) {
           saveMessage = `\nError saving file to ${fullPath}: ${fileError instanceof Error ? fileError.message : String(fileError)}`;
@@ -54,10 +62,10 @@ File saved to: ${fullPath}`;
         }
       }
 
-      await this.sendMessage(message.senderId, 'response', result + saveMessage);
+      await this.sendMessage(message.senderId, 'response', result + saveMessage, message.requestId);
     } catch (error) {
       console.error(`Agent ${this.name} (${this.id}) failed to perform task:`, error);
-      await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error instanceof Error ? error.message : String(error)}`);
+      await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error instanceof Error ? error.message : String(error)}`, message.requestId);
     }
   }
 
