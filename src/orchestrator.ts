@@ -11,30 +11,41 @@ export class Orchestrator {
   constructor() {
     this.agents = new Map<string, Agent>();
 
-    // Instantiate OllamaAgents
-    const ollamaAgent1 = new OllamaAgent('ollama-agent-1', 'Ollama Worker 1');
-    const ollamaAgent2 = new OllamaAgent('ollama-agent-2', 'Ollama Worker 2');
-    const ollamaAgent3 = new OllamaAgent('ollama-agent-3', 'Ollama Worker 3');
-    const ollamaAgent4 = new OllamaAgent('ollama-agent-4', 'Ollama Worker 4');
+    const DEFAULT_WORKER_COUNT = 4;
+    const DEFAULT_SUB_QUEEN_COUNT = 2;
 
-    // Instantiate SubQueenAgents and assign OllamaAgents to them
-    const subQueen1 = new SubQueenAgent('sub-queen-1', 'Sub Queen Alpha');
-    subQueen1.initializeGroupAgents([ollamaAgent1, ollamaAgent2]);
+    const workerCount = parseInt(process.env.OLLAMA_WORKER_COUNT || '', 10) || DEFAULT_WORKER_COUNT;
+    const subQueenCount = DEFAULT_SUB_QUEEN_COUNT; // For now, keep sub-queen count fixed
 
-    const subQueen2 = new SubQueenAgent('sub-queen-2', 'Sub Queen Beta');
-    subQueen2.initializeGroupAgents([ollamaAgent3, ollamaAgent4]);
+    const ollamaAgents: OllamaAgent[] = [];
+    for (let i = 0; i < workerCount; i++) {
+      const agent = new OllamaAgent(`ollama-agent-${i + 1}`, `Ollama Worker ${i + 1}`);
+      ollamaAgents.push(agent);
+    }
 
-    // Instantiate Main QueenAgent
-    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
+    const subQueenAgents: SubQueenAgent[] = [];
+    const subQueenGroups: OllamaAgent[][] = Array.from({ length: subQueenCount }, () => []);
+
+    for (let i = 0; i < subQueenCount; i++) {
+      const subQueen = new SubQueenAgent(`sub-queen-${i + 1}`, `Sub Queen ${String.fromCharCode(65 + i)}`);
+      subQueenAgents.push(subQueen);
+    }
+
+    // Distribute OllamaAgents among SubQueenAgents
+    ollamaAgents.forEach((agent, index) => {
+      subQueenGroups[index % subQueenCount].push(agent);
+    });
+
+    // Initialize SubQueenAgents with their assigned OllamaAgents
+    subQueenAgents.forEach((subQueen, index) => {
+      subQueen.initializeGroupAgents(subQueenGroups[index]);
+    });
 
     // Register all agents
+    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
     this.registerAgent(queenAgent);
-    this.registerAgent(subQueen1);
-    this.registerAgent(subQueen2);
-    this.registerAgent(ollamaAgent1);
-    this.registerAgent(ollamaAgent2);
-    this.registerAgent(ollamaAgent3);
-    this.registerAgent(ollamaAgent4);
+    subQueenAgents.forEach(sq => this.registerAgent(sq));
+    ollamaAgents.forEach(oa => this.registerAgent(oa));
 
     // Set orchestrator reference for all BaseAgents
     this.agents.forEach(agent => {
