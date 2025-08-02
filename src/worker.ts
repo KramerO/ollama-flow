@@ -1,15 +1,12 @@
 
 import ollama from 'ollama';
-import type { Agent, AgentMessage } from './agent.ts';
+import { AgentMessage, BaseAgent } from './agent.ts';
 
-export class OllamaAgent implements Agent {
-  id: string;
-  name: string;
+export class OllamaAgent extends BaseAgent {
   private model: string;
 
   constructor(id: string, name: string, model: string = 'llama3') {
-    this.id = id;
-    this.name = name;
+    super(id, name);
     this.model = model;
   }
 
@@ -19,11 +16,11 @@ export class OllamaAgent implements Agent {
     try {
       const result = await this.performTask(message.content);
       console.log(`Agent ${this.name} (${this.id}) completed task with result: ${result}`);
-      // In a real multi-agent system, the agent would then send a response back
-      // to the sender or another agent via the orchestrator.
-      // For now, we just log the result.
+      // Example of sending a response back to the sender
+      await this.sendMessage(message.senderId, 'response', result);
     } catch (error) {
       console.error(`Agent ${this.name} (${this.id}) failed to perform task:`, error);
+      await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error.message}`);
     }
   }
 

@@ -1,15 +1,30 @@
 
 import type { Agent, AgentMessage } from './agent.ts';
+import { BaseAgent } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
+import { QueenAgent } from './queenAgent.ts';
 
 export class Orchestrator {
   private agents: Map<string, Agent>;
 
   constructor() {
     this.agents = new Map<string, Agent>();
-    // Register a default OllamaAgent for initial testing
-    const defaultOllamaAgent = new OllamaAgent('ollama-agent-1', 'Default Ollama Agent');
-    this.registerAgent(defaultOllamaAgent);
+
+    // Instantiate and register agents
+    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
+    const ollamaAgent1 = new OllamaAgent('ollama-agent-1', 'Ollama Worker 1');
+    const ollamaAgent2 = new OllamaAgent('ollama-agent-2', 'Ollama Worker 2');
+
+    this.registerAgent(queenAgent);
+    this.registerAgent(ollamaAgent1);
+    this.registerAgent(ollamaAgent2);
+
+    // Set orchestrator reference for all BaseAgents
+    this.agents.forEach(agent => {
+      if (agent instanceof BaseAgent) {
+        agent.setOrchestrator(this);
+      }
+    });
   }
 
   registerAgent(agent: Agent): void {
@@ -32,16 +47,17 @@ export class Orchestrator {
 
   async run(prompt: string): Promise<string> {
     console.log('Orchestrator received prompt:', prompt);
-    // For now, we'll hardcode sending the prompt to the default OllamaAgent
-    const message: AgentMessage = {
+    // Send the initial prompt to the QueenAgent
+    const initialMessage: AgentMessage = {
       senderId: 'orchestrator',
-      receiverId: 'ollama-agent-1',
+      receiverId: 'queen-agent-1',
       type: 'task',
       content: prompt,
     };
-    await this.dispatchMessage(message);
-    // In a real scenario, the orchestrator would wait for a response from the agent
+    await this.dispatchMessage(initialMessage);
+
+    // In a real scenario, the orchestrator would wait for a response from the QueenAgent
     // and return it. For this basic setup, we just log the action.
-    return `Prompt sent to ollama-agent-1: ${prompt}`;
+    return `Initial prompt sent to QueenAgent (queen-agent-1): ${prompt}`;
   }
 }
