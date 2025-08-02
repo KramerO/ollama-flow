@@ -19,7 +19,7 @@ export class OllamaAgent extends BaseAgent {
       await this.sendMessage(message.senderId, 'response', result);
     } catch (error) {
       console.error(`Agent ${this.name} (${this.id}) failed to perform task:`, error);
-      await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error.message}`);
+      await this.sendMessage(message.senderId, 'error', `Failed to perform task: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

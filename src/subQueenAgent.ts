@@ -29,6 +29,11 @@ export class SubQueenAgent extends BaseAgent {
       const targetAgent = this.groupOllamaAgents[this.currentAgentIndex];
       this.currentAgentIndex = (this.currentAgentIndex + 1) % this.groupOllamaAgents.length;
 
+      if (!targetAgent) {
+        console.error('No valid OllamaAgent found in group for delegation.');
+        return;
+      }
+
       const delegatedTask = `Delegated by ${this.name} to ${targetAgent.name}: ${message.content}`;
       console.log(`SubQueenAgent ${this.name} delegating task to ${targetAgent.name} (${targetAgent.id})`);
       await this.sendMessage(targetAgent.id, 'sub-task', delegatedTask);

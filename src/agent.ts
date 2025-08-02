@@ -34,7 +34,8 @@ export abstract class BaseAgent implements Agent {
   protected orchestrator: Orchestrator | null = null;
 
   constructor(id: string, name: string) {
-    super(id, name);
+    this.id = id;
+    this.name = name;
   }
 
   setOrchestrator(orchestrator: Orchestrator): void {

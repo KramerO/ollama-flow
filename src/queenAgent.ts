@@ -32,6 +32,11 @@ export class QueenAgent extends BaseAgent {
       const targetSubQueen = this.subQueenAgents[this.currentSubQueenIndex];
       this.currentSubQueenIndex = (this.currentSubQueenIndex + 1) % this.subQueenAgents.length;
 
+      if (!targetSubQueen) {
+        console.error('No valid SubQueenAgent found for delegation.');
+        return;
+      }
+
       const delegatedTask = `Delegated task from Main Queen to ${targetSubQueen.name}: ${message.content}`;
       console.log(`QueenAgent delegating task to ${targetSubQueen.name} (${targetSubQueen.id})`);
       await this.sendMessage(targetSubQueen.id, 'sub-task-to-subqueen', delegatedTask);

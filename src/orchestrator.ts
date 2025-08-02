@@ -42,12 +42,12 @@ export class Orchestrator {
 
       // Distribute OllamaAgents among SubQueenAgents
       ollamaAgents.forEach((agent, index) => {
-        subQueenGroups[index % DEFAULT_SUB_QUEEN_COUNT].push(agent);
+        subQueenGroups[index % DEFAULT_SUB_QUEEN_COUNT]!.push(agent);
       });
 
       // Initialize SubQueenAgents with their assigned OllamaAgents
       subQueenAgents.forEach((subQueen, index) => {
-        subQueen.initializeGroupAgents(subQueenGroups[index]);
+        subQueen.initializeGroupAgents(subQueenGroups[index]!);
         this.registerAgent(subQueen);
       });
     } else if (architectureType === 'FULLY_CONNECTED' || architectureType === 'CENTRALIZED') {
