@@ -25,6 +25,12 @@ export class Orchestrator {
         agent.setOrchestrator(this);
       }
     });
+
+    // Initialize QueenAgent after all agents are registered and orchestrator is set
+    const queen = this.agents.get('queen-agent-1');
+    if (queen instanceof QueenAgent) {
+      queen.initializeAgents();
+    }
   }
 
   registerAgent(agent: Agent): void {
@@ -43,6 +49,16 @@ export class Orchestrator {
     } else {
       console.error(`Agent with ID ${message.receiverId} not found.`);
     }
+  }
+
+  getAgentsByType<T extends BaseAgent>(type: new (...args: any[]) => T): T[] {
+    const foundAgents: T[] = [];
+    this.agents.forEach(agent => {
+      if (agent instanceof type) {
+        foundAgents.push(agent);
+      }
+    });
+    return foundAgents;
   }
 
   async run(prompt: string): Promise<string> {
