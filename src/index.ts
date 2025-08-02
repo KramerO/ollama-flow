@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { Orchestrator } from './orchestrator';
+import { Orchestrator } from './orchestrator.ts';
 
 const program = new Command();
 const orchestrator = new Orchestrator();
