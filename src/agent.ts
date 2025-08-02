@@ -13,14 +13,28 @@ export interface Agent {
   receiveMessage(message: AgentMessage): Promise<void>;
 }
 
+export type ArchitectureType = 'FULLY_CONNECTED' | 'CENTRALIZED' | 'HIERARCHICAL';
+
+export interface AgentMessage {
+  senderId: string;
+  receiverId: string;
+  type: string; // e.g., 'task', 'response', 'query'
+  content: any; // The actual message payload
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  receiveMessage(message: AgentMessage): Promise<void>;
+}
+
 export abstract class BaseAgent implements Agent {
   id: string;
   name: string;
   protected orchestrator: Orchestrator | null = null;
 
   constructor(id: string, name: string) {
-    this.id = id;
-    this.name = name;
+    super(id, name);
   }
 
   setOrchestrator(orchestrator: Orchestrator): void {

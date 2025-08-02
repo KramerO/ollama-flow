@@ -22,6 +22,20 @@ app.post('/run', async (req, res) => {
   }
 });
 
+app.post('/configure_architecture', (req, res) => {
+  const { architectureType, workerCount } = req.body;
+  if (!architectureType || !workerCount) {
+    return res.status(400).send('architectureType and workerCount are required');
+  }
+  try {
+    orchestrator.reconfigureAgents(architectureType, workerCount);
+    res.json({ message: 'Agent architecture reconfigured successfully' });
+  } catch (error) {
+    console.error('Error reconfiguring agents:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Ollama Flow server listening at http://localhost:${port}`);
 });

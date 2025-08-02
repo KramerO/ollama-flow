@@ -1,5 +1,5 @@
 
-import type { Agent, AgentMessage } from './agent.ts';
+import type { Agent, AgentMessage, ArchitectureType } from './agent.ts';
 import { BaseAgent } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 import { QueenAgent } from './queenAgent.ts';
@@ -7,15 +7,20 @@ import { SubQueenAgent } from './subQueenAgent.ts';
 
 export class Orchestrator {
   private agents: Map<string, Agent>;
+  private currentArchitecture: ArchitectureType;
 
   constructor() {
     this.agents = new Map<string, Agent>();
+    this.currentArchitecture = 'HIERARCHICAL'; // Default architecture
+    this.reconfigureAgents(this.currentArchitecture, parseInt(process.env.OLLAMA_WORKER_COUNT || '', 10) || 4);
+  }
 
-    const DEFAULT_WORKER_COUNT = 4;
-    const DEFAULT_SUB_QUEEN_COUNT = 2;
+  reconfigureAgents(architectureType: ArchitectureType, workerCount: number): void {
+    console.log(`Reconfiguring agents for architecture: ${architectureType} with ${workerCount} workers.`);
+    this.agents.clear(); // Clear existing agents
+    this.currentArchitecture = architectureType;
 
-    const workerCount = parseInt(process.env.OLLAMA_WORKER_COUNT || '', 10) || DEFAULT_WORKER_COUNT;
-    const subQueenCount = DEFAULT_SUB_QUEEN_COUNT; // For now, keep sub-queen count fixed
+    const DEFAULT_SUB_QUEEN_COUNT = 2; // For now, keep sub-queen count fixed
 
     const ollamaAgents: OllamaAgent[] = [];
     for (let i = 0; i < workerCount; i++) {
@@ -23,28 +28,33 @@ export class Orchestrator {
       ollamaAgents.push(agent);
     }
 
-    const subQueenAgents: SubQueenAgent[] = [];
-    const subQueenGroups: OllamaAgent[][] = Array.from({ length: subQueenCount }, () => []);
-
-    for (let i = 0; i < subQueenCount; i++) {
-      const subQueen = new SubQueenAgent(`sub-queen-${i + 1}`, `Sub Queen ${String.fromCharCode(65 + i)}`);
-      subQueenAgents.push(subQueen);
-    }
-
-    // Distribute OllamaAgents among SubQueenAgents
-    ollamaAgents.forEach((agent, index) => {
-      subQueenGroups[index % subQueenCount].push(agent);
-    });
-
-    // Initialize SubQueenAgents with their assigned OllamaAgents
-    subQueenAgents.forEach((subQueen, index) => {
-      subQueen.initializeGroupAgents(subQueenGroups[index]);
-    });
-
-    // Register all agents
     const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
     this.registerAgent(queenAgent);
-    subQueenAgents.forEach(sq => this.registerAgent(sq));
+
+    if (architectureType === 'HIERARCHICAL') {
+      const subQueenAgents: SubQueenAgent[] = [];
+      const subQueenGroups: OllamaAgent[][] = Array.from({ length: DEFAULT_SUB_QUEEN_COUNT }, () => []);
+
+      for (let i = 0; i < DEFAULT_SUB_QUEEN_COUNT; i++) {
+        const subQueen = new SubQueenAgent(`sub-queen-${i + 1}`, `Sub Queen ${String.fromCharCode(65 + i)}`);
+        subQueenAgents.push(subQueen);
+      }
+
+      // Distribute OllamaAgents among SubQueenAgents
+      ollamaAgents.forEach((agent, index) => {
+        subQueenGroups[index % DEFAULT_SUB_QUEEN_COUNT].push(agent);
+      });
+
+      // Initialize SubQueenAgents with their assigned OllamaAgents
+      subQueenAgents.forEach((subQueen, index) => {
+        subQueen.initializeGroupAgents(subQueenGroups[index]);
+        this.registerAgent(subQueen);
+      });
+    } else if (architectureType === 'FULLY_CONNECTED' || architectureType === 'CENTRALIZED') {
+      // For these architectures, OllamaAgents are directly managed by the Queen or Orchestrator
+      // No SubQueens needed
+    }
+
     ollamaAgents.forEach(oa => this.registerAgent(oa));
 
     // Set orchestrator reference for all BaseAgents
@@ -91,17 +101,26 @@ export class Orchestrator {
 
   async run(prompt: string): Promise<string> {
     console.log('Orchestrator received prompt:', prompt);
-    // Send the initial prompt to the QueenAgent
+    let targetReceiverId: string;
+
+    switch (this.currentArchitecture) {
+      case 'FULLY_CONNECTED':
+      case 'CENTRALIZED':
+      case 'HIERARCHICAL':
+        targetReceiverId = 'queen-agent-1';
+        break;
+      default:
+        targetReceiverId = 'queen-agent-1'; // Fallback
+    }
+
     const initialMessage: AgentMessage = {
       senderId: 'orchestrator',
-      receiverId: 'queen-agent-1',
+      receiverId: targetReceiverId,
       type: 'task',
       content: prompt,
     };
     await this.dispatchMessage(initialMessage);
 
-    // In a real scenario, the orchestrator would wait for a response from the QueenAgent
-    // and return it. For this basic setup, we just log the action.
-    return `Initial prompt sent to QueenAgent (queen-agent-1): ${prompt}`;
+    return `Initial prompt sent to ${targetReceiverId}: ${prompt}`;
   }
 }
