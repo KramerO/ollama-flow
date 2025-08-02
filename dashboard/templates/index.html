@@ -68,6 +68,34 @@
     <div class="container">
         <h1>Ollama Flow Dashboard</h1>
 
+        <div class="config-section">
+            <h2>Configure Agent Architecture</h2>
+            <form action="/configure_architecture" method="post">
+                <label for="architecture_type">Select Architecture:</label>
+                <select id="architecture_type" name="architecture_type">
+                    <option value="HIERARCHICAL" {% if config_architecture_type == 'HIERARCHICAL' %}selected{% endif %}>Hierarchical</option>
+                    <option value="CENTRALIZED" {% if config_architecture_type == 'CENTRALIZED' %}selected{% endif %}>Centralized</option>
+                    <option value="FULLY_CONNECTED" {% if config_architecture_type == 'FULLY_CONNECTED' %}selected{% endif %}>Fully Connected</option>
+                </select>
+
+                <label for="worker_count">Number of Worker Agents:</label>
+                <input type="number" id="worker_count" name="worker_count" value="{{ config_worker_count if config_worker_count else 4 }}" min="1">
+
+                <button type="submit">Apply Configuration</button>
+            </form>
+
+            {% if config_message %}
+                <div class="result-box" style="background-color: #d4edda; color: #155724; border-color: #c3e6cb;">
+                    {{ config_message }}
+                </div>
+            {% endif %}
+            {% if config_error %}
+                <div class="result-box" style="background-color: #f8d7da; color: #721c24; border-color: #f5c6cb;">
+                    {{ config_error }}
+                </div>
+            {% endif %}
+        </div>
+
         <form action="/run_prompt" method="post">
             <label for="prompt">Enter your prompt:</label>
             <textarea id="prompt" name="prompt" placeholder="Type your prompt here...">{{ prompt if prompt else '' }}</textarea>
