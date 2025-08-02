@@ -46,7 +46,7 @@ def test_configure_architecture_success(mock_post, client):
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = {'message': 'Agent architecture reconfigured successfully'}
 
-    response = client.post('/configure_architecture', json={'architectureType': 'HIERARCHICAL', 'workerCount': 5})
+    response = client.post('/configure_architecture', data={'architecture_type': 'HIERARCHICAL', 'worker_count': '5'})
     assert response.status_code == 200
     assert b"Agent architecture reconfigured successfully" in response.data
     mock_post.assert_called_once_with('http://localhost:3000/configure_architecture', json={'architectureType': 'HIERARCHICAL', 'workerCount': 5})
@@ -55,13 +55,27 @@ def test_configure_architecture_success(mock_post, client):
 def test_configure_architecture_backend_error(mock_post, client):
     mock_post.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error: Internal Server Error for url: http://localhost:3000/configure_architecture")
 
-    response = client.post('/configure_architecture', json={'architectureType': 'HIERARCHICAL', 'workerCount': 5})
+    response = client.post('/configure_architecture', data={'architecture_type': 'HIERARCHICAL', 'worker_count': '5'})
     assert response.status_code == 200 # Flask still returns 200 for template rendering
     assert b"Error reconfiguring architecture: 500 Server Error: Internal Server Error for url: http://localhost:3000/configure_architecture" in response.data
 
 @patch('requests.post')
 def test_configure_architecture_missing_params(mock_post, client):
-    response = client.post('/configure_architecture', json={'architectureType': 'HIERARCHICAL'})
+    response = client.post('/configure_architecture', data={'architecture_type': 'HIERARCHICAL'})
+    assert response.status_code == 400 # Flask should return 400 for missing params
+    assert response.json == {'error': 'architectureType and workerCount are required'}
+
+@patch('requests.post')
+def test_configure_architecture_backend_error(mock_post, client):
+    mock_post.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error: Internal Server Error for url: http://localhost:3000/configure_architecture")
+
+    response = client.post('/configure_architecture', data={'architecture_type': 'HIERARCHICAL', 'worker_count': 5})
+    assert response.status_code == 200 # Flask still returns 200 for template rendering
+    assert b"Error reconfiguring architecture: 500 Server Error: Internal Server Error for url: http://localhost:3000/configure_architecture" in response.data
+
+@patch('requests.post')
+def test_configure_architecture_missing_params(mock_post, client):
+    response = client.post('/configure_architecture', data={'architecture_type': 'HIERARCHICAL'})
     assert response.status_code == 400 # Flask should return 400 for missing params
     assert response.json == {'error': 'architectureType and workerCount are required'}
 

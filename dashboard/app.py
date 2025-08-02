@@ -27,12 +27,10 @@ def run_prompt():
 
 @app.route('/configure_architecture', methods=['POST'])
 def configure_architecture():
-    request_data = request.get_json()
-    if not request_data or 'architectureType' not in request_data or 'workerCount' not in request_data:
+    architecture_type = request.form.get('architecture_type')
+    worker_count = request.form.get('worker_count')
+    if not architecture_type or not worker_count:
         return jsonify({'error': 'architectureType and workerCount are required'}), 400
-
-    architecture_type = request_data['architectureType']
-    worker_count = request_data['workerCount']
     try:
         response = requests.post(f"{OLLAMA_FLOW_SERVER_URL}/configure_architecture", json={'architectureType': architecture_type, 'workerCount': int(worker_count)})
         response.raise_for_status()  # Raise an exception for HTTP errors
