@@ -11,6 +11,8 @@ export class Orchestrator {
   private currentArchitecture: ArchitectureType;
   private projectFolderPath: string | null = null;
   private currentOllamaModel: string = 'llama3'; // Default Ollama model
+  private responseResolvers: Map<string, (value: string | PromiseLike<string>) => void> = new Map();
+  private responseRejecters: Map<string, (reason?: any) => void> = new Map();
 
   constructor() {
     this.agents = new Map<string, Agent>();
@@ -105,6 +107,34 @@ export class Orchestrator {
   }
 
   async dispatchMessage(message: AgentMessage): Promise<void> {
+    console.log(`[Orchestrator.dispatchMessage] Received message. Sender: ${message.senderId}, Receiver: ${message.receiverId}, Type: ${message.type}`);
+
+    if (message.receiverId === 'orchestrator') {
+      console.log(`[Orchestrator.dispatchMessage] Handling message for orchestrator. Type: ${message.type}, Sender: ${message.senderId}`);
+      if (message.type === 'final-response') {
+        const resolve = this.responseResolvers.get(message.senderId);
+        console.log(`[Orchestrator.dispatchMessage] Found resolver for ${message.senderId}: ${!!resolve}`);
+        if (resolve) {
+          resolve(message.content);
+          this.responseResolvers.delete(message.senderId);
+          this.responseRejecters.delete(message.senderId);
+        } else {
+          console.warn(`[Orchestrator.dispatchMessage] No resolver found for sender ${message.senderId}.`);
+        }
+      } else if (message.type === 'final-error') {
+        const reject = this.responseRejecters.get(message.senderId);
+        console.log(`[Orchestrator.dispatchMessage] Found rejecter for ${message.senderId}: ${!!reject}`);
+        if (reject) {
+          reject(new Error(message.content));
+          this.responseResolvers.delete(message.senderId);
+          this.responseRejecters.delete(message.senderId);
+        } else {
+          console.warn(`[Orchestrator.dispatchMessage] No rejecter found for sender ${message.senderId}.`);
+        }
+      }
+      return; // Message handled by orchestrator
+    }
+
     const receiver = this.agents.get(message.receiverId);
     if (receiver) {
       console.log(`Dispatching message from ${message.senderId} to ${message.receiverId}`);
@@ -144,8 +174,11 @@ export class Orchestrator {
       type: 'task',
       content: prompt,
     };
-    await this.dispatchMessage(initialMessage);
 
-    return `Initial prompt sent to ${targetReceiverId}: ${prompt}`;
+    return new Promise<string>(async (resolve, reject) => {
+      this.responseResolvers.set(targetReceiverId, resolve);
+      this.responseRejecters.set(targetReceiverId, reject);
+      await this.dispatchMessage(initialMessage);
+    });
   }
 }
