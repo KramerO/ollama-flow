@@ -8,11 +8,17 @@ import { SubQueenAgent } from './subQueenAgent.ts';
 export class Orchestrator {
   private agents: Map<string, Agent>;
   private currentArchitecture: ArchitectureType;
+  private projectFolderPath: string | null = null;
 
   constructor() {
     this.agents = new Map<string, Agent>();
     this.currentArchitecture = 'HIERARCHICAL'; // Default architecture
     this.reconfigureAgents(this.currentArchitecture, parseInt(process.env.OLLAMA_WORKER_COUNT || '', 10) || 4);
+  }
+
+  setProjectFolder(path: string): void {
+    this.projectFolderPath = path;
+    console.log(`Project folder path set to: ${this.projectFolderPath}`);
   }
 
   reconfigureAgents(architectureType: ArchitectureType, workerCount: number): void {

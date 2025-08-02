@@ -45,5 +45,22 @@ def configure_architecture():
         error_message = f"Error reconfiguring architecture: {e}"
         return render_template('index.html', config_error=error_message)
 
+@app.route('/set_project_folder', methods=['POST'])
+def set_project_folder():
+    project_folder_path = request.form['project_folder_path']
+    if not project_folder_path:
+        return render_template('index.html', project_folder_error="Project folder path is required.")
+    try:
+        response = requests.post(f"{OLLAMA_FLOW_SERVER_URL}/set_project_folder", json={'projectFolderPath': project_folder_path})
+        response.raise_for_status() # Raise an exception for HTTP errors
+        message = response.json().get('message', 'Project folder set successfully.')
+        return render_template('index.html', project_folder_message=message, project_folder_path=project_folder_path)
+    except requests.exceptions.ConnectionError:
+        error_message = "Error: Could not connect to Ollama Flow server. Is it running?"
+        return render_template('index.html', project_folder_error=error_message)
+    except requests.exceptions.RequestException as e:
+        error_message = f"Error setting project folder: {e}"
+        return render_template('index.html', project_folder_error=error_message)
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

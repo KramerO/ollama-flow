@@ -36,6 +36,20 @@ app.post('/configure_architecture', (req, res) => {
   }
 });
 
+app.post('/set_project_folder', (req, res) => {
+  const { projectFolderPath } = req.body;
+  if (!projectFolderPath) {
+    return res.status(400).send('projectFolderPath is required');
+  }
+  try {
+    orchestrator.setProjectFolder(projectFolderPath);
+    res.json({ message: 'Project folder path set successfully' });
+  } catch (error) {
+    console.error('Error setting project folder:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Ollama Flow server listening at http://localhost:${port}`);
 });
