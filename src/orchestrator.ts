@@ -3,6 +3,7 @@ import type { Agent, AgentMessage } from './agent.ts';
 import { BaseAgent } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 import { QueenAgent } from './queenAgent.ts';
+import { SubQueenAgent } from './subQueenAgent.ts';
 
 export class Orchestrator {
   private agents: Map<string, Agent>;
@@ -10,14 +11,30 @@ export class Orchestrator {
   constructor() {
     this.agents = new Map<string, Agent>();
 
-    // Instantiate and register agents
-    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
+    // Instantiate OllamaAgents
     const ollamaAgent1 = new OllamaAgent('ollama-agent-1', 'Ollama Worker 1');
     const ollamaAgent2 = new OllamaAgent('ollama-agent-2', 'Ollama Worker 2');
+    const ollamaAgent3 = new OllamaAgent('ollama-agent-3', 'Ollama Worker 3');
+    const ollamaAgent4 = new OllamaAgent('ollama-agent-4', 'Ollama Worker 4');
 
+    // Instantiate SubQueenAgents and assign OllamaAgents to them
+    const subQueen1 = new SubQueenAgent('sub-queen-1', 'Sub Queen Alpha');
+    subQueen1.initializeGroupAgents([ollamaAgent1, ollamaAgent2]);
+
+    const subQueen2 = new SubQueenAgent('sub-queen-2', 'Sub Queen Beta');
+    subQueen2.initializeGroupAgents([ollamaAgent3, ollamaAgent4]);
+
+    // Instantiate Main QueenAgent
+    const queenAgent = new QueenAgent('queen-agent-1', 'Main Queen');
+
+    // Register all agents
     this.registerAgent(queenAgent);
+    this.registerAgent(subQueen1);
+    this.registerAgent(subQueen2);
     this.registerAgent(ollamaAgent1);
     this.registerAgent(ollamaAgent2);
+    this.registerAgent(ollamaAgent3);
+    this.registerAgent(ollamaAgent4);
 
     // Set orchestrator reference for all BaseAgents
     this.agents.forEach(agent => {

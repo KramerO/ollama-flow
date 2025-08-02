@@ -1,9 +1,10 @@
 import { AgentMessage, BaseAgent } from './agent.ts';
 import { OllamaAgent } from './worker.ts'; // Import OllamaAgent to use its type
+import { SubQueenAgent } from './subQueenAgent.ts';
 
 export class QueenAgent extends BaseAgent {
-  private ollamaAgents: OllamaAgent[] = [];
-  private currentAgentIndex: number = 0;
+  private subQueenAgents: SubQueenAgent[] = [];
+  private currentSubQueenIndex: number = 0;
 
   constructor(id: string, name: string) {
     super(id, name);
@@ -13,8 +14,8 @@ export class QueenAgent extends BaseAgent {
   // and the orchestrator reference is set.
   initializeAgents(): void {
     if (this.orchestrator) {
-      this.ollamaAgents = this.orchestrator.getAgentsByType(OllamaAgent);
-      console.log(`QueenAgent ${this.name} found ${this.ollamaAgents.length} OllamaAgents.`);
+      this.subQueenAgents = this.orchestrator.getAgentsByType(SubQueenAgent);
+      console.log(`QueenAgent ${this.name} found ${this.subQueenAgents.length} SubQueenAgents.`);
     }
   }
 
@@ -22,25 +23,24 @@ export class QueenAgent extends BaseAgent {
     console.log(`QueenAgent ${this.name} (${this.id}) received message from ${message.senderId}: ${message.content}`);
 
     if (message.type === 'task') {
-      if (this.ollamaAgents.length === 0) {
-        console.warn('No OllamaAgents available to delegate tasks.');
+      if (this.subQueenAgents.length === 0) {
+        console.warn('No SubQueenAgents available to delegate tasks.');
         return;
       }
 
-      // Select an OllamaAgent in a round-robin fashion
-      const targetAgent = this.ollamaAgents[this.currentAgentIndex];
-      this.currentAgentIndex = (this.currentAgentIndex + 1) % this.ollamaAgents.length;
+      // Select a SubQueenAgent in a round-robin fashion
+      const targetSubQueen = this.subQueenAgents[this.currentSubQueenIndex];
+      this.currentSubQueenIndex = (this.currentSubQueenIndex + 1) % this.subQueenAgents.length;
 
-      const delegatedTask = `Delegated task from Queen to ${targetAgent.name}: ${message.content}`;
-      console.log(`QueenAgent delegating task to ${targetAgent.name} (${targetAgent.id})`);
-      await this.sendMessage(targetAgent.id, 'sub-task', delegatedTask);
+      const delegatedTask = `Delegated task from Main Queen to ${targetSubQueen.name}: ${message.content}`;
+      console.log(`QueenAgent delegating task to ${targetSubQueen.name} (${targetSubQueen.id})`);
+      await this.sendMessage(targetSubQueen.id, 'sub-task-to-subqueen', delegatedTask);
 
-    } else if (message.type === 'response') {
-      console.log(`QueenAgent received response from ${message.senderId}: ${message.content}`);
-      // In a fully connected architecture, the Queen might just log the response
-      // or forward it to the original sender (e.g., the orchestrator or another agent).
-      // For now, we'll just log it.
-      await this.sendMessage('orchestrator', 'final-response', `Response from ${message.senderId}: ${message.content}`);
+    } else if (message.type === 'group-response') {
+      console.log(`QueenAgent received group response from ${message.senderId}: ${JSON.stringify(message.content)}`);
+      // Process the response from the SubQueenAgent
+      // For now, just forward it as a final response to the orchestrator
+      await this.sendMessage('orchestrator', 'final-response', `Aggregated response from ${message.content.fromSubQueen}: ${message.content.content}`);
     } else if (message.type === 'error') {
       console.error(`QueenAgent received error from ${message.senderId}: ${message.content}`);
       await this.sendMessage('orchestrator', 'final-error', `Error from ${message.senderId}: ${message.content}`);
