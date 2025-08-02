@@ -1,6 +1,6 @@
 
 import ollama from 'ollama';
-import { AgentMessage, type Agent } from './agent.ts';
+import type { Agent, AgentMessage } from './agent.ts';
 
 export class OllamaAgent implements Agent {
   id: string;

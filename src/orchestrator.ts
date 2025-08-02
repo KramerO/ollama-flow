@@ -1,5 +1,5 @@
 
-import { AgentMessage, type Agent } from './agent.ts';
+import type { Agent, AgentMessage } from './agent.ts';
 import { OllamaAgent } from './worker.ts';
 
 export class Orchestrator {
