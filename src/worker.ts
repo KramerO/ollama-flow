@@ -22,9 +22,18 @@ export class OllamaAgent extends BaseAgent {
       console.log(`Agent ${this.name} (${this.id}) completed task with result: ${result}`);
 
       let saveMessage = '';
-      const saveMatch = message.content.match(/speichere sie unter (.*?) ab/i);
+      const saveMatch = message.content.match(/(?:speichere sie (?:im Projektordner )?unter|speichere sie als)\s+(.+?)(?:\s+ab)?$/i);
       if (saveMatch && this.projectFolderPath) {
-        const fullPath = saveMatch[1];
+        let targetPath = saveMatch[1].trim();
+        let fullPath: string;
+
+        // Check if the extracted path is absolute
+        if (path.isAbsolute(targetPath)) {
+          fullPath = targetPath;
+        } else {
+          // If relative, join with project folder path
+          fullPath = path.join(this.projectFolderPath, targetPath);
+        }
         
         // Extract code block from the result
         const codeBlockMatch = result.match(/```[\s\S]*?\n([\s\S]*?)\n```/);
@@ -32,7 +41,8 @@ export class OllamaAgent extends BaseAgent {
 
         console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${codeContent.length}`);
         try {
-          await fs.mkdir(this.projectFolderPath, { recursive: true });
+          const dirName = path.dirname(fullPath);
+          await fs.mkdir(dirName, { recursive: true });
           await fs.writeFile(fullPath, codeContent);
           saveMessage = `\nFile saved to: ${fullPath}`;
           console.log(saveMessage);
