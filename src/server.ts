@@ -1,6 +1,6 @@
 
 import express from 'express';
-import { Orchestrator } from './orchestrator';
+import { Orchestrator } from './orchestrator.ts';
 
 const app = express();
 const port = 3000;
