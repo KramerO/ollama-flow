@@ -7,6 +7,7 @@ import type { AgentMessage } from '../agent.ts';
 // Mock the ollama module to prevent actual API calls during tests
 jest.mock('ollama', () => ({
   chat: jest.fn(() => Promise.resolve({ message: { content: 'Mocked Ollama Response' } })),
+  list: jest.fn(() => Promise.resolve({ models: [{ name: 'llama3' }, { name: 'codellama' }] })),
 }));
 
 describe('Orchestrator and Agent Communication', () => {
@@ -168,6 +169,20 @@ describe('Orchestrator and Agent Communication', () => {
         type: 'final-response',
         content: expect.stringContaining('Aggregated response from sub-queen-1'),
       }));
+    });
+  });
+
+  describe('Ollama Model Management', () => {
+    it('should return a list of Ollama models', async () => {
+      const models = await orchestrator.getOllamaModels();
+      expect(models).toEqual(['llama3', 'codellama']);
+    });
+
+    it('should set the current Ollama model and reconfigure agents', async () => {
+      const reconfigureAgentsSpy = jest.spyOn(orchestrator, 'reconfigureAgents');
+      orchestrator.setCurrentOllamaModel('codellama');
+      expect(orchestrator['currentOllamaModel']).toBe('codellama');
+      expect(reconfigureAgentsSpy).toHaveBeenCalled();
     });
   });
 });
