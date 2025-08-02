@@ -63,7 +63,7 @@ export class Orchestrator {
       const subQueenGroups: OllamaAgent[][] = Array.from({ length: DEFAULT_SUB_QUEEN_COUNT }, () => []);
 
       for (let i = 0; i < DEFAULT_SUB_QUEEN_COUNT; i++) {
-        const subQueen = new SubQueenAgent(`sub-queen-${i + 1}`, `Sub Queen ${String.fromCharCode(65 + i)}`);
+        const subQueen = new SubQueenAgent(`sub-queen-${i + 1}`, `Sub Queen ${String.fromCharCode(65 + i)}`, this.currentOllamaModel);
         subQueenAgents.push(subQueen);
       }
 

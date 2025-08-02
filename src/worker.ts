@@ -38,13 +38,22 @@ export class OllamaAgent extends BaseAgent {
         // Extract code block from the result
         const codeBlockMatch = result.match(/```[\s\S]*?\n([\s\S]*?)\n```/);
         const codeContent = codeBlockMatch ? codeBlockMatch[1] : result; // Use full result if no code block found
+        const contentToWrite = typeof codeContent === 'string' ? codeContent : String(codeContent); // Ensure it's a string
 
-        console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${codeContent.length}`);
+        console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${contentToWrite.length}`);
         try {
           const dirName = path.dirname(fullPath);
           await fs.mkdir(dirName, { recursive: true });
-          await fs.writeFile(fullPath, codeContent);
-          saveMessage = `\nFile saved to: ${fullPath}`;
+        const codeContent = codeBlockMatch ? codeBlockMatch[1] : result;
+        const contentToWrite = typeof codeContent === 'string' ? codeContent : String(codeContent); // Ensure it's a string
+
+        console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${contentToWrite.length}`);
+        try {
+          const dirName = path.dirname(fullPath);
+          await fs.mkdir(dirName, { recursive: true });
+          await fs.writeFile(fullPath, contentToWrite);
+          saveMessage = `
+File saved to: ${fullPath}`;
           console.log(saveMessage);
         } catch (fileError) {
           saveMessage = `\nError saving file to ${fullPath}: ${fileError instanceof Error ? fileError.message : String(fileError)}`;
