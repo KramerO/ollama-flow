@@ -1,8 +1,16 @@
-import { Orchestrator } from '../orchestrator.ts';
-import { OllamaAgent } from '../worker.ts';
-import { QueenAgent } from '../queenAgent.ts';
-import { SubQueenAgent } from '../subQueenAgent.ts';
 import type { AgentMessage } from '../agent.ts';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+jest.mock('fs/promises', () => ({
+  mkdir: jest.fn(() => Promise.resolve()),
+  writeFile: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('path', () => ({
+  join: jest.fn((...args) => args.join(path.sep)),
+  sep: '/',
+}));
 
 // Mock the ollama module to prevent actual API calls during tests
 jest.mock('ollama', () => ({
@@ -183,6 +191,88 @@ describe('Orchestrator and Agent Communication', () => {
       orchestrator.setCurrentOllamaModel('codellama');
       expect(orchestrator['currentOllamaModel']).toBe('codellama');
       expect(reconfigureAgentsSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Ollama Model Management', () => {
+    it('should return a list of Ollama models', async () => {
+      const models = await orchestrator.getOllamaModels();
+      expect(models).toEqual(['llama3', 'codellama']);
+    });
+
+    it('should set the current Ollama model and reconfigure agents', async () => {
+      const reconfigureAgentsSpy = jest.spyOn(orchestrator, 'reconfigureAgents');
+      orchestrator.setCurrentOllamaModel('codellama');
+      expect(orchestrator['currentOllamaModel']).toBe('codellama');
+      expect(reconfigureAgentsSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('OllamaAgent File Saving', () => {
+    it('should save the generated code to a file if specified in the prompt', async () => {
+      const mockProjectFolder = '/mock/project/path';
+      const ollamaAgent = new OllamaAgent('test-agent', 'Test Agent', 'llama3', mockProjectFolder);
+
+      const prompt = 'Generate a Python script and speichere sie unter /mock/project/path/test_app.py ab';
+      const generatedContent = '```python\nprint("Hello, World!")\n```';
+
+      // Mock the performTask to return the generated content
+      jest.spyOn(ollamaAgent as any, 'performTask').mockResolvedValue(generatedContent);
+      const mkdirSpy = jest.spyOn(fs, 'mkdir');
+      const writeFileSpy = jest.spyOn(fs, 'writeFile');
+
+      await ollamaAgent.receiveMessage({
+        senderId: 'orchestrator',
+        receiverId: 'test-agent',
+        type: 'task',
+        content: prompt,
+      });
+
+      expect(mkdirSpy).toHaveBeenCalledWith(mockProjectFolder, { recursive: true });
+      expect(writeFileSpy).toHaveBeenCalledWith('/mock/project/path/test_app.py', 'print("Hello, World!")\n');
+    });
+
+    it('should not save the file if project folder is not set', async () => {
+      const ollamaAgent = new OllamaAgent('test-agent', 'Test Agent', 'llama3', null);
+
+      const prompt = 'Generate a Python script and speichere sie unter /mock/project/path/test_app.py ab';
+      const generatedContent = '```python\nprint("Hello, World!")\n```';
+
+      jest.spyOn(ollamaAgent as any, 'performTask').mockResolvedValue(generatedContent);
+      const mkdirSpy = jest.spyOn(fs, 'mkdir');
+      const writeFileSpy = jest.spyOn(fs, 'writeFile');
+
+      await ollamaAgent.receiveMessage({
+        senderId: 'orchestrator',
+        receiverId: 'test-agent',
+        type: 'task',
+        content: prompt,
+      });
+
+      expect(mkdirSpy).not.toHaveBeenCalled();
+      expect(writeFileSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not save the file if save instruction is not in prompt', async () => {
+      const mockProjectFolder = '/mock/project/path';
+      const ollamaAgent = new OllamaAgent('test-agent', 'Test Agent', 'llama3', mockProjectFolder);
+
+      const prompt = 'Generate a Python script';
+      const generatedContent = '```python\nprint("Hello, World!")\n```';
+
+      jest.spyOn(ollamaAgent as any, 'performTask').mockResolvedValue(generatedContent);
+      const mkdirSpy = jest.spyOn(fs, 'mkdir');
+      const writeFileSpy = jest.spyOn(fs, 'writeFile');
+
+      await ollamaAgent.receiveMessage({
+        senderId: 'orchestrator',
+        receiverId: 'test-agent',
+        type: 'task',
+        content: prompt,
+      });
+
+      expect(mkdirSpy).not.toHaveBeenCalled();
+      expect(writeFileSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -22,15 +22,15 @@ export class OllamaAgent extends BaseAgent {
       console.log(`Agent ${this.name} (${this.id}) completed task with result: ${result}`);
 
       let saveMessage = '';
-      const saveMatch = message.content.match(/speichere sie als (\S+)/i);
+      const saveMatch = message.content.match(/speichere sie unter (.*?) ab/i);
       if (saveMatch && this.projectFolderPath) {
-        const filename = saveMatch[1];
-        const fullPath = path.join(this.projectFolderPath, filename);
+        const fullPath = saveMatch[1];
         
         // Extract code block from the result
         const codeBlockMatch = result.match(/```[\s\S]*?\n([\s\S]*?)\n```/);
         const codeContent = codeBlockMatch ? codeBlockMatch[1] : result; // Use full result if no code block found
 
+        console.log(`[OllamaAgent] Attempting to save file. Full Path: ${fullPath}, Content Length: ${codeContent.length}`);
         try {
           await fs.mkdir(this.projectFolderPath, { recursive: true });
           await fs.writeFile(fullPath, codeContent);
