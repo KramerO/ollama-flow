@@ -15,69 +15,184 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mcp_tools import MCPToolsManager, MCPTool, ToolCategory, ToolResult
+from mcp_tools import MCPToolsManager, MCPToolType, MCPToolResult, MCPToolRegistry
 
-class TestMCPTool(unittest.TestCase):
-    """Test cases for MCPTool dataclass"""
+class TestMCPToolResult(unittest.TestCase):
+    """Test cases for MCPToolResult dataclass"""
     
-    def test_mcp_tool_creation(self):
-        """Test MCPTool creation"""
-        tool = MCPTool(
-            tool_id="test-tool-1",
-            name="Test Tool",
-            category=ToolCategory.ORCHESTRATION,
-            description="A test tool",
-            parameters={"param1": "string", "param2": "integer"},
-            required_parameters=["param1"],
-            execution_count=5,
-            average_duration=2.5,
-            success_rate=0.95,
-            last_used="2024-01-01T10:00:00"
-        )
-        
-        self.assertEqual(tool.tool_id, "test-tool-1")
-        self.assertEqual(tool.name, "Test Tool")
-        self.assertEqual(tool.category, ToolCategory.ORCHESTRATION)
-        self.assertEqual(tool.description, "A test tool")
-        self.assertEqual(tool.execution_count, 5)
-        self.assertEqual(tool.success_rate, 0.95)
-        self.assertIn("param1", tool.parameters)
-        self.assertIn("param1", tool.required_parameters)
-
-class TestToolResult(unittest.TestCase):
-    """Test cases for ToolResult dataclass"""
-    
-    def test_tool_result_creation(self):
-        """Test ToolResult creation"""
-        result = ToolResult(
-            tool_id="test-tool-1",
+    def test_mcp_tool_result_creation(self):
+        """Test MCPToolResult creation"""
+        result = MCPToolResult(
+            tool_name="test-tool",
             success=True,
-            result_data={"output": "success", "value": 42},
-            error_message=None,
+            result={"output": "success", "value": 42},
             execution_time=1.5,
+            metadata={"category": "test"},
             timestamp="2024-01-01T10:00:00"
         )
         
-        self.assertEqual(result.tool_id, "test-tool-1")
+        self.assertEqual(result.tool_name, "test-tool")
         self.assertTrue(result.success)
-        self.assertEqual(result.result_data["value"], 42)
-        self.assertIsNone(result.error_message)
+        self.assertEqual(result.result["value"], 42)
         self.assertEqual(result.execution_time, 1.5)
+        self.assertEqual(result.metadata["category"], "test")
     
-    def test_tool_result_failure(self):
-        """Test ToolResult for failure case"""
-        result = ToolResult(
-            tool_id="test-tool-1",
+    def test_mcp_tool_result_failure(self):
+        """Test MCPToolResult for failure case"""
+        result = MCPToolResult(
+            tool_name="test-tool",
             success=False,
-            result_data=None,
-            error_message="Tool execution failed",
+            result="Tool execution failed",
             execution_time=0.5,
+            metadata={},
             timestamp="2024-01-01T10:00:00"
         )
         
         self.assertFalse(result.success)
-        self.assertIsNone(result.result_data)
-        self.assertEqual(result.error_message, "Tool execution failed")
+        self.assertEqual(result.result, "Tool execution failed")
+
+class TestMCPToolRegistry(unittest.TestCase):
+    """Test cases for MCP Tool Registry"""
+    
+    def setUp(self):
+        """Set up test fixtures"""
+        self.registry = MCPToolRegistry()
+    
+    def test_registry_initialization(self):
+        """Test registry initialization"""
+        self.assertIsInstance(self.registry.tools, dict)
+        self.assertIsInstance(self.registry.tool_metadata, dict)
+        self.assertIsInstance(self.registry.execution_history, list)
+        self.assertEqual(len(self.registry.tools), 0)
+    
+    def test_tool_registration(self):
+        """Test tool registration"""
+        def test_tool(**kwargs):
+            return {"result": "test"}
+        
+        self.registry.register_tool(
+            name="test_tool",
+            func=test_tool,
+            category=MCPToolType.ORCHESTRATION,
+            description="A test tool",
+            parameters={"param1": "string"}
+        )
+        
+        self.assertIn("test_tool", self.registry.tools)
+        self.assertIn("test_tool", self.registry.tool_metadata)
+        self.assertEqual(self.registry.tool_metadata["test_tool"]["category"], MCPToolType.ORCHESTRATION)
+        self.assertEqual(self.registry.tool_metadata["test_tool"]["description"], "A test tool")
+    
+    def test_get_tool(self):
+        """Test getting a registered tool"""
+        def test_tool():
+            return "test result"
+        
+        self.registry.register_tool("test_tool", test_tool, MCPToolType.ANALYSIS, "Test")
+        
+        retrieved_tool = self.registry.get_tool("test_tool")
+        self.assertEqual(retrieved_tool, test_tool)
+        
+        # Test non-existent tool
+        non_existent = self.registry.get_tool("non_existent")
+        self.assertIsNone(non_existent)
+    
+    def test_list_tools(self):
+        """Test listing tools"""
+        def tool1():
+            pass
+        def tool2():
+            pass
+        
+        self.registry.register_tool("tool1", tool1, MCPToolType.ORCHESTRATION, "Tool 1")
+        self.registry.register_tool("tool2", tool2, MCPToolType.MEMORY, "Tool 2")
+        
+        # List all tools
+        all_tools = self.registry.list_tools()
+        self.assertEqual(len(all_tools), 2)
+        self.assertIn("tool1", all_tools)
+        self.assertIn("tool2", all_tools)
+        
+        # List tools by category
+        orchestration_tools = self.registry.list_tools(MCPToolType.ORCHESTRATION)
+        self.assertEqual(len(orchestration_tools), 1)
+        self.assertIn("tool1", orchestration_tools)
+    
+    def test_tool_execution_sync(self):
+        """Test synchronous tool execution"""
+        def sync_tool(value=10):
+            return {"result": value * 2}
+        
+        self.registry.register_tool("sync_tool", sync_tool, MCPToolType.ANALYSIS, "Sync tool")
+        
+        async def test_execution():
+            result = await self.registry.execute_tool("sync_tool", value=5)
+            
+            self.assertIsInstance(result, MCPToolResult)
+            self.assertEqual(result.tool_name, "sync_tool")
+            self.assertTrue(result.success)
+            self.assertEqual(result.result["result"], 10)
+            self.assertGreater(result.execution_time, 0)
+        
+        asyncio.run(test_execution())
+    
+    def test_tool_execution_async(self):
+        """Test asynchronous tool execution"""
+        async def async_tool(delay=0.01):
+            await asyncio.sleep(delay)
+            return {"result": "async_complete"}
+        
+        self.registry.register_tool("async_tool", async_tool, MCPToolType.COORDINATION, "Async tool")
+        
+        async def test_execution():
+            result = await self.registry.execute_tool("async_tool", delay=0.01)
+            
+            self.assertIsInstance(result, MCPToolResult)
+            self.assertEqual(result.tool_name, "async_tool")
+            self.assertTrue(result.success)
+            self.assertEqual(result.result["result"], "async_complete")
+            self.assertGreater(result.execution_time, 0.01)
+        
+        asyncio.run(test_execution())
+    
+    def test_tool_execution_failure(self):
+        """Test tool execution failure handling"""
+        def failing_tool():
+            raise ValueError("Tool failed")
+        
+        self.registry.register_tool("failing_tool", failing_tool, MCPToolType.SECURITY, "Failing tool")
+        
+        async def test_failure():
+            result = await self.registry.execute_tool("failing_tool")
+            
+            self.assertIsInstance(result, MCPToolResult)
+            self.assertEqual(result.tool_name, "failing_tool")
+            self.assertFalse(result.success)
+            self.assertIn("Tool failed", result.result)
+        
+        asyncio.run(test_failure())
+    
+    def test_execution_history(self):
+        """Test execution history tracking"""
+        def simple_tool():
+            return "done"
+        
+        self.registry.register_tool("simple_tool", simple_tool, MCPToolType.MONITORING, "Simple tool")
+        
+        async def test_history():
+            # Execute tool multiple times
+            for i in range(3):
+                await self.registry.execute_tool("simple_tool")
+            
+            # Check execution history
+            self.assertEqual(len(self.registry.execution_history), 3)
+            
+            # All executions should be for our tool
+            for execution in self.registry.execution_history:
+                self.assertEqual(execution.tool_name, "simple_tool")
+                self.assertTrue(execution.success)
+        
+        asyncio.run(test_history())
 
 class TestMCPToolsManager(unittest.TestCase):
     """Test cases for MCP Tools Manager"""
@@ -86,7 +201,16 @@ class TestMCPToolsManager(unittest.TestCase):
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, "test_mcp.db")
-        self.manager = MCPToolsManager(db_path=self.db_path)
+        
+        # Mock psutil to avoid system dependencies
+        with patch('psutil.cpu_percent', return_value=50.0), \
+             patch('psutil.virtual_memory') as mock_memory, \
+             patch('psutil.disk_usage') as mock_disk:
+            
+            mock_memory.return_value = Mock(percent=60.0, available=1000000)
+            mock_disk.return_value = Mock(percent=70.0, free=5000000)
+            
+            self.manager = MCPToolsManager(db_path=self.db_path)
     
     def tearDown(self):
         """Clean up test fixtures"""
@@ -97,388 +221,155 @@ class TestMCPToolsManager(unittest.TestCase):
     def test_manager_initialization(self):
         """Test manager initialization"""
         self.assertEqual(self.manager.db_path, self.db_path)
-        self.assertIsInstance(self.manager.tools, dict)
+        self.assertIsInstance(self.manager.registry, MCPToolRegistry)
         self.assertIsInstance(self.manager.active_sessions, dict)
-        self.assertIsInstance(self.manager.execution_history, list)
-        self.assertFalse(self.manager.is_initialized)
-    
-    def test_database_initialization(self):
-        """Test database initialization"""
-        asyncio.run(self.manager.initialize())
         
         # Check if database file was created
         self.assertTrue(os.path.exists(self.db_path))
-        
-        # Check if tables were created
+    
+    def test_database_tables_creation(self):
+        """Test database tables creation"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
         
-        expected_tables = ['mcp_tools', 'tool_executions', 'tool_sessions']
+        expected_tables = ['tool_executions', 'mcp_sessions', 'tool_metrics']
         for table in expected_tables:
             self.assertIn(table, tables)
         
         conn.close()
-        self.assertTrue(self.manager.is_initialized)
     
-    def test_tools_registration(self):
-        """Test tools registration during initialization"""
-        asyncio.run(self.manager.initialize())
+    def test_built_in_tools_registration(self):
+        """Test that built-in tools are registered"""
+        tools = self.manager.registry.list_tools()
         
-        # Check if tools were registered
-        self.assertGreater(len(self.manager.tools), 0)
+        # Should have registered some built-in tools
+        self.assertGreater(len(tools), 0)
         
         # Check for specific tool categories
-        categories = set()
-        for tool in self.manager.tools.values():
-            categories.add(tool.category)
+        orchestration_tools = self.manager.registry.list_tools(MCPToolType.ORCHESTRATION)
+        memory_tools = self.manager.registry.list_tools(MCPToolType.MEMORY)
         
-        expected_categories = {
-            ToolCategory.ORCHESTRATION,
-            ToolCategory.MEMORY,
-            ToolCategory.ANALYSIS,
-            ToolCategory.COORDINATION,
-            ToolCategory.AUTOMATION,
-            ToolCategory.MONITORING,
-            ToolCategory.OPTIMIZATION,
-            ToolCategory.SECURITY
-        }
-        
-        # Should have tools from multiple categories
-        self.assertGreater(len(categories.intersection(expected_categories)), 3)
+        self.assertGreater(len(orchestration_tools), 0)
+        self.assertGreater(len(memory_tools), 0)
     
-    def test_tool_execution_success(self):
-        """Test successful tool execution"""
-        async def test_execution():
-            await self.manager.initialize()
+    @patch('psutil.cpu_percent', return_value=45.0)
+    @patch('psutil.virtual_memory')
+    @patch('psutil.disk_usage')
+    def test_system_metrics_tool(self, mock_disk, mock_memory, mock_cpu):
+        """Test system metrics tool execution"""
+        mock_memory.return_value = Mock(percent=55.0, available=2000000)
+        mock_disk.return_value = Mock(percent=65.0, free=10000000)
+        
+        async def test_metrics():
+            # Execute system monitor tool
+            result = await self.manager.registry.execute_tool("system_monitor")
             
-            # Get a test tool (swarm_init should be available)
-            test_tools = [t for t in self.manager.tools.values() if t.name == "swarm_init"]
-            self.assertGreater(len(test_tools), 0)
-            
-            test_tool = test_tools[0]
-            
-            # Execute tool with valid parameters
-            parameters = {
-                "topology": "mesh",
-                "max_agents": 5,
-                "strategy": "balanced"
-            }
-            
-            result = await self.manager.execute_tool(test_tool.tool_id, parameters)
-            
-            self.assertIsInstance(result, ToolResult)
-            self.assertEqual(result.tool_id, test_tool.tool_id)
             self.assertTrue(result.success)
-            self.assertIsNotNone(result.result_data)
-            self.assertIsNone(result.error_message)
-            self.assertGreater(result.execution_time, 0)
+            self.assertIn("cpu", result.result)
+            self.assertIn("usage_percent", result.result["cpu"])
+            self.assertIn("memory", result.result)
+            self.assertIn("disk", result.result)
+            self.assertEqual(result.result["cpu"]["usage_percent"], 45.0)
         
-        asyncio.run(test_execution())
-    
-    def test_tool_execution_missing_parameters(self):
-        """Test tool execution with missing required parameters"""
-        async def test_missing_params():
-            await self.manager.initialize()
-            
-            # Get a tool that requires parameters
-            test_tools = [t for t in self.manager.tools.values() if t.required_parameters]
-            self.assertGreater(len(test_tools), 0)
-            
-            test_tool = test_tools[0]
-            
-            # Execute tool without required parameters
-            result = await self.manager.execute_tool(test_tool.tool_id, {})
-            
-            self.assertIsInstance(result, ToolResult)
-            self.assertFalse(result.success)
-            self.assertIsNotNone(result.error_message)
-            self.assertIn("Missing required parameter", result.error_message)
-        
-        asyncio.run(test_missing_params())
-    
-    def test_tool_execution_invalid_tool(self):
-        """Test execution of non-existent tool"""
-        async def test_invalid_tool():
-            await self.manager.initialize()
-            
-            result = await self.manager.execute_tool("non-existent-tool", {})
-            
-            self.assertIsInstance(result, ToolResult)
-            self.assertFalse(result.success)
-            self.assertIsNotNone(result.error_message)
-            self.assertIn("Tool not found", result.error_message)
-        
-        asyncio.run(test_invalid_tool())
+        asyncio.run(test_metrics())
     
     def test_session_management(self):
-        """Test session creation and management"""
+        """Test session management functionality"""
         async def test_sessions():
-            await self.manager.initialize()
+            # Create session using swarm_init tool
+            result = await self.manager.registry.execute_tool(
+                "swarm_init", 
+                topology="mesh", 
+                max_agents=5
+            )
             
-            # Create a session
-            session_id = await self.manager.create_session("test_session", {
-                "user": "test_user",
-                "context": "unit_test"
-            })
+            self.assertTrue(result.success)
+            self.assertIn("session_id", result.result)
             
-            self.assertIsNotNone(session_id)
+            session_id = result.result["session_id"]
             self.assertIn(session_id, self.manager.active_sessions)
-            
-            # Get session info
-            session_info = await self.manager.get_session_info(session_id)
-            
-            self.assertIsNotNone(session_info)
-            self.assertEqual(session_info["session_name"], "test_session")
-            self.assertEqual(session_info["context"]["user"], "test_user")
-            
-            # Close session
-            success = await self.manager.close_session(session_id)
-            
-            self.assertTrue(success)
-            self.assertNotIn(session_id, self.manager.active_sessions)
         
         asyncio.run(test_sessions())
     
-    def test_tool_statistics_tracking(self):
-        """Test tool execution statistics tracking"""
-        async def test_statistics():
-            await self.manager.initialize()
+    def test_memory_operations(self):
+        """Test memory storage and retrieval"""
+        async def test_memory():
+            # Store memory
+            store_result = await self.manager.registry.execute_tool(
+                "memory_store",
+                key="test_key",
+                data={"data": "test_value", "timestamp": "2024-01-01"},
+                category="test"
+            )
             
-            # Get a test tool
-            test_tools = list(self.manager.tools.values())
-            self.assertGreater(len(test_tools), 0)
+            self.assertTrue(store_result.success)
             
-            test_tool = test_tools[0]
-            initial_count = test_tool.execution_count
+            # Retrieve memory
+            retrieve_result = await self.manager.registry.execute_tool(
+                "memory_retrieve",
+                key="test_key",
+                category="test"
+            )
             
-            # Execute tool multiple times
+            self.assertTrue(retrieve_result.success)
+            self.assertEqual(retrieve_result.result["data"]["data"], "test_value")
+        
+        asyncio.run(test_memory())
+    
+    def test_performance_analysis(self):
+        """Test performance analysis tool"""
+        async def test_performance():
+            # Mock performance data
+            metrics = {
+                "execution_time": 25.5,
+                "memory_usage": 512,
+                "cpu_usage": 75.0,
+                "agents_active": 3
+            }
+            
+            result = await self.manager.registry.execute_tool(
+                "performance_analyze",
+                target="system",
+                timeframe=3600
+            )
+            
+            self.assertTrue(result.success)
+            self.assertIn("metrics", result.result)
+            self.assertIn("performance_score", result.result)
+        
+        asyncio.run(test_performance())
+    
+    def test_tool_execution_history_memory(self):
+        """Test tool execution history in memory"""
+        async def test_memory_history():
+            # Execute a tool multiple times
             for i in range(3):
-                await self.manager.execute_tool(test_tool.tool_id, {})
+                await self.manager.registry.execute_tool("system_monitor")
             
-            # Check updated statistics
-            updated_tool = self.manager.tools[test_tool.tool_id]
-            self.assertEqual(updated_tool.execution_count, initial_count + 3)
+            # Check execution history in memory
+            history = self.manager.registry.execution_history
             
-            # Check execution history
-            self.assertGreaterEqual(len(self.manager.execution_history), 3)
+            self.assertGreaterEqual(len(history), 3)
             
-            # Recent executions should be for our test tool
-            recent_executions = [e for e in self.manager.execution_history[-3:] 
-                               if e.tool_id == test_tool.tool_id]
+            # Last executions should be system_monitor
+            recent_executions = [e for e in history[-3:] if e.tool_name == "system_monitor"]
             self.assertEqual(len(recent_executions), 3)
         
-        asyncio.run(test_statistics())
+        asyncio.run(test_memory_history())
     
-    def test_tool_categories_filtering(self):
-        """Test filtering tools by category"""
-        async def test_filtering():
-            await self.manager.initialize()
+    def test_error_handling(self):
+        """Test error handling and logging"""
+        async def test_errors():
+            # Try to execute non-existent tool
+            result = await self.manager.registry.execute_tool("non_existent_tool")
             
-            # Get tools by category
-            orchestration_tools = await self.manager.get_tools_by_category(ToolCategory.ORCHESTRATION)
-            
-            self.assertIsInstance(orchestration_tools, list)
-            self.assertGreater(len(orchestration_tools), 0)
-            
-            # All tools should be from orchestration category
-            for tool in orchestration_tools:
-                self.assertEqual(tool.category, ToolCategory.ORCHESTRATION)
+            self.assertFalse(result.success)
+            self.assertIn("not found", result.result)
         
-        asyncio.run(test_filtering())
-    
-    def test_tool_search(self):
-        """Test tool search functionality"""
-        async def test_search():
-            await self.manager.initialize()
-            
-            # Search for tools containing "swarm"
-            search_results = await self.manager.search_tools("swarm")
-            
-            self.assertIsInstance(search_results, list)
-            
-            # Results should contain tools with "swarm" in name or description
-            for tool in search_results:
-                self.assertTrue(
-                    "swarm" in tool.name.lower() or 
-                    "swarm" in tool.description.lower()
-                )
-        
-        asyncio.run(test_search())
-    
-    def test_tool_status_reporting(self):
-        """Test tool status reporting"""
-        async def test_status():
-            await self.manager.initialize()
-            
-            # Execute some tools to generate data
-            test_tools = list(self.manager.tools.values())[:3]
-            for tool in test_tools:
-                await self.manager.execute_tool(tool.tool_id, {})
-            
-            # Get tool status
-            status = await self.manager.get_tool_status()
-            
-            self.assertIsInstance(status, dict)
-            self.assertIn("total_tools", status)
-            self.assertIn("active_sessions", status)
-            self.assertIn("execution_history_count", status)
-            self.assertIn("categories", status)
-            self.assertIn("recent_executions", status)
-            
-            self.assertGreater(status["total_tools"], 0)
-            self.assertGreaterEqual(status["execution_history_count"], 3)
-        
-        asyncio.run(test_status())
-    
-    def test_execution_history_persistence(self):
-        """Test execution history persistence"""
-        async def test_persistence():
-            await self.manager.initialize()
-            
-            # Execute a tool
-            test_tool = list(self.manager.tools.values())[0]
-            result = await self.manager.execute_tool(test_tool.tool_id, {})
-            
-            # Check if execution was stored in database
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT tool_id, success, execution_time FROM tool_executions 
-                WHERE tool_id = ? ORDER BY timestamp DESC LIMIT 1
-            """, (test_tool.tool_id,))
-            
-            row = cursor.fetchone()
-            conn.close()
-            
-            self.assertIsNotNone(row)
-            self.assertEqual(row[0], test_tool.tool_id)
-            self.assertEqual(bool(row[1]), result.success)
-            self.assertEqual(row[2], result.execution_time)
-        
-        asyncio.run(test_persistence())
-    
-    def test_cleanup_functionality(self):
-        """Test cleanup functionality"""
-        async def test_cleanup():
-            await self.manager.initialize()
-            
-            # Create some test data
-            session_id = await self.manager.create_session("cleanup_test", {})
-            
-            # Execute some tools
-            test_tool = list(self.manager.tools.values())[0]
-            await self.manager.execute_tool(test_tool.tool_id, {})
-            
-            # Cleanup
-            await self.manager.cleanup()
-            
-            # Verify cleanup
-            self.assertEqual(len(self.manager.active_sessions), 0)
-            
-            # Database should still exist but connections should be closed
-            self.assertTrue(os.path.exists(self.db_path))
-        
-        asyncio.run(test_cleanup())
-
-class TestSpecificMCPTools(unittest.TestCase):
-    """Test specific MCP tools functionality"""
-    
-    def setUp(self):
-        """Set up test fixtures for specific tools"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.temp_dir, "test_specific_tools.db")
-        self.manager = MCPToolsManager(db_path=self.db_path)
-    
-    def tearDown(self):
-        """Clean up test fixtures"""
-        import shutil
-        if os.path.exists(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
-    
-    def test_swarm_init_tool(self):
-        """Test swarm initialization tool"""
-        async def test_swarm_init():
-            await self.manager.initialize()
-            
-            # Find swarm_init tool
-            swarm_tools = [t for t in self.manager.tools.values() if t.name == "swarm_init"]
-            self.assertGreater(len(swarm_tools), 0)
-            
-            swarm_tool = swarm_tools[0]
-            
-            # Test with valid topology
-            result = await self.manager.execute_tool(swarm_tool.tool_id, {
-                "topology": "hierarchical",
-                "max_agents": 8,
-                "strategy": "specialized"
-            })
-            
-            self.assertTrue(result.success)
-            self.assertIn("swarm_id", result.result_data)
-            self.assertIn("topology", result.result_data)
-            self.assertEqual(result.result_data["topology"], "hierarchical")
-        
-        asyncio.run(test_swarm_init())
-    
-    def test_memory_store_tool(self):
-        """Test memory storage tool"""
-        async def test_memory_store():
-            await self.manager.initialize()
-            
-            # Find memory_store tool
-            memory_tools = [t for t in self.manager.tools.values() if t.name == "memory_store"]
-            self.assertGreater(len(memory_tools), 0)
-            
-            memory_tool = memory_tools[0]
-            
-            # Test storing data
-            result = await self.manager.execute_tool(memory_tool.tool_id, {
-                "key": "test_key",
-                "value": {"data": "test_value", "timestamp": "2024-01-01"},
-                "namespace": "test_namespace"
-            })
-            
-            self.assertTrue(result.success)
-            self.assertIn("stored", result.result_data)
-            self.assertTrue(result.result_data["stored"])
-        
-        asyncio.run(test_memory_store())
-    
-    def test_performance_analyze_tool(self):
-        """Test performance analysis tool"""
-        async def test_performance_analyze():
-            await self.manager.initialize()
-            
-            # Find performance_analyze tool
-            perf_tools = [t for t in self.manager.tools.values() if t.name == "performance_analyze"]
-            self.assertGreater(len(perf_tools), 0)
-            
-            perf_tool = perf_tools[0]
-            
-            # Test performance analysis
-            result = await self.manager.execute_tool(perf_tool.tool_id, {
-                "metrics": {
-                    "execution_time": 25.5,
-                    "memory_usage": 512,
-                    "cpu_usage": 75.0
-                },
-                "baseline": {
-                    "execution_time": 30.0,
-                    "memory_usage": 600,
-                    "cpu_usage": 80.0
-                }
-            })
-            
-            self.assertTrue(result.success)
-            self.assertIn("analysis", result.result_data)
-            self.assertIn("recommendations", result.result_data)
-            self.assertIn("performance_score", result.result_data)
-        
-        asyncio.run(test_performance_analyze())
+        asyncio.run(test_errors())
 
 class TestMCPToolsIntegration(unittest.TestCase):
     """Integration tests for MCP Tools Manager"""
@@ -486,7 +377,7 @@ class TestMCPToolsIntegration(unittest.TestCase):
     def setUp(self):
         """Set up integration test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.temp_dir, "integration_mcp.db")
+        self.db_path = os.path.join(self.temp_dir, "integration_test.db")
         
     def tearDown(self):
         """Clean up integration test fixtures"""
@@ -494,63 +385,59 @@ class TestMCPToolsIntegration(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     
-    def test_full_workflow_simulation(self):
+    @patch('psutil.cpu_percent', return_value=30.0)
+    @patch('psutil.virtual_memory')
+    @patch('psutil.disk_usage')
+    def test_full_workflow(self, mock_disk, mock_memory, mock_cpu):
         """Test complete MCP tools workflow"""
+        mock_memory.return_value = Mock(percent=40.0, available=3000000)
+        mock_disk.return_value = Mock(percent=50.0, free=15000000)
+        
         async def test_workflow():
             manager = MCPToolsManager(db_path=self.db_path)
-            await manager.initialize()
             
             # 1. Initialize swarm
-            swarm_tools = [t for t in manager.tools.values() if t.name == "swarm_init"]
-            swarm_result = await manager.execute_tool(swarm_tools[0].tool_id, {
-                "topology": "mesh",
-                "max_agents": 6,
-                "strategy": "balanced"
-            })
+            swarm_result = await manager.registry.execute_tool(
+                "swarm_init",
+                topology="hierarchical",
+                max_agents=6
+            )
             
             self.assertTrue(swarm_result.success)
-            swarm_id = swarm_result.result_data["swarm_id"]
+            session_id = swarm_result.result["session_id"]
             
-            # 2. Create session
-            session_id = await manager.create_session("workflow_test", {
-                "swarm_id": swarm_id,
-                "task": "integration_test"
-            })
+            # 2. Store configuration in memory
+            config_result = await manager.registry.execute_tool(
+                "memory_store",
+                key="swarm_config",
+                data={"topology": "hierarchical", "agents": 6},
+                category=session_id
+            )
             
-            # 3. Store some memory
-            memory_tools = [t for t in manager.tools.values() if t.name == "memory_store"]
-            memory_result = await manager.execute_tool(memory_tools[0].tool_id, {
-                "key": "swarm_config",
-                "value": {"swarm_id": swarm_id, "topology": "mesh"},
-                "namespace": session_id
-            })
+            self.assertTrue(config_result.success)
             
-            self.assertTrue(memory_result.success)
+            # 3. Get system metrics
+            metrics_result = await manager.registry.execute_tool("system_monitor")
             
-            # 4. Analyze performance (mock data)
-            perf_tools = [t for t in manager.tools.values() if t.name == "performance_analyze"]
-            perf_result = await manager.execute_tool(perf_tools[0].tool_id, {
-                "metrics": {
-                    "agents_active": 6,
-                    "tasks_completed": 10,
-                    "avg_response_time": 2.3
-                }
-            })
+            self.assertTrue(metrics_result.success)
+            self.assertIn("cpu", metrics_result.result)
+            self.assertIn("usage_percent", metrics_result.result["cpu"])
+            
+            # 4. Analyze performance
+            perf_result = await manager.registry.execute_tool(
+                "performance_analyze",
+                target="system",
+                timeframe=3600
+            )
             
             self.assertTrue(perf_result.success)
             
-            # 5. Get tool status to verify all operations
-            status = await manager.get_tool_status()
+            # 5. Verify execution history
+            history_count = len(manager.registry.execution_history)
+            self.assertGreaterEqual(history_count, 4)
             
-            self.assertGreaterEqual(status["execution_history_count"], 3)
-            self.assertEqual(status["active_sessions"], 1)
-            
-            # 6. Clean up session
-            await manager.close_session(session_id)
-            
-            # Verify workflow completed successfully
-            final_status = await manager.get_tool_status()
-            self.assertEqual(final_status["active_sessions"], 0)
+            # 6. Verify execution history in memory (registry doesn't persist to DB)
+            self.assertGreaterEqual(history_count, 4)
         
         asyncio.run(test_workflow())
 

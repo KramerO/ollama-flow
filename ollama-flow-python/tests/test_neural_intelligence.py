@@ -15,7 +15,7 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from neural_intelligence import NeuralIntelligenceEngine, NeuralPattern, CognitiveModel
+from neural_intelligence import NeuralIntelligenceEngine, NeuralPattern, CognitiveInsight
 
 class TestNeuralPattern(unittest.TestCase):
     """Test cases for NeuralPattern dataclass"""
