@@ -27,5 +27,14 @@ thumbs.db
 htmlcov/
 .tox/
 
-# Ollama specific
+# Ollama Flow specific
 *.ollama_cache
+*.db
+*.log
+.swarm/
+.claude-flow/metrics/
+
+# Temporary and cache files
+*.tmp
+*_temp.py
+temp_*
