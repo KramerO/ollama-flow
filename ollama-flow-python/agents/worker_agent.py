@@ -15,7 +15,7 @@ class WorkerAgent(BaseAgent):
 
     async def _perform_task(self, prompt: str) -> str:
         try:
-            response = await ollama.chat(
+            response = ollama.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -43,20 +43,15 @@ class WorkerAgent(BaseAgent):
             output += f"Error: Command exited with code {process.returncode}\n"
         return output.strip()
 
-    async def receive_message(self, message: AgentMessage):
-        print(f"Agent {self.name} ({self.agent_id}) received message from {message.sender_id}: {message.content}")
-
-        result = await self._perform_task(message.content)
-        print(f"Agent {self.name} ({self.agent_id}) completed task with result: {result}")
-
+    async def _handle_file_saving(self, message_content: str, result: str) -> str:
         save_message = ""
-        save_match = re.search(r"(?:speichere sie (?:im Projektordner )?unter|speichere sie als)\s+(.+?)(?:\s+ab)?$", message.content, re.IGNORECASE)
+        save_match = re.search(r"(?:speichere sie (?:im Projektordner )?unter|speichere sie als|save it to)\s+([\w\.-]+)(?:\s+in the project folder)?(?:\s+ab)?\.?$", message_content, re.IGNORECASE)
 
         if save_match and self.project_folder_path:
             target_path = save_match.group(1).strip()
             full_path = os.path.join(self.project_folder_path, target_path)
 
-            code_block_match = re.search(r"```[\s\S]*?\n([\s\S]*?)\n```", result)
+            code_block_match = re.search(r"```[\\s\\S]*?\\n([\\s\\S]*?)\\n```", result)
             content_to_write = code_block_match.group(1) if code_block_match else result
 
             try:
@@ -68,12 +63,27 @@ class WorkerAgent(BaseAgent):
             except Exception as e:
                 save_message = f"\nError saving file to {full_path}: {e}"
                 print(save_message)
+        return save_message
 
-        # Check for shell command execution instruction
-        command_match = re.search(r"(?:führe den befehl aus|execute command):\s*(.+)", message.content, re.IGNORECASE)
+    async def _handle_command_execution(self, message_content: str) -> str:
+        command_output = ""
+        command_match = re.search(r"(?:führe den befehl aus|execute command):\s*(.+)", message_content, re.IGNORECASE)
         if command_match:
             command_to_execute = command_match.group(1).strip()
             command_output = await self._run_command(command_to_execute)
-            result += f"\nCommand Output:\n{command_output}"
+        return command_output
 
-        await self.send_message(message.sender_id, "response", result + save_message, message.request_id)
+    async def receive_message(self, message: AgentMessage):
+        print(f"Agent {self.name} ({self.agent_id}) received message from {message.sender_id}: {message.content}")
+
+        result = await self._perform_task(message.content)
+        print(f"Agent {self.name} ({self.agent_id}) completed task with result: {result}")
+
+        save_message = await self._handle_file_saving(message.content, result)
+        command_output = await self._handle_command_execution(message.content)
+
+        final_response = result + save_message
+        if command_output:
+            final_response += f"\nCommand Output:\n{command_output}"
+
+        await self.send_message(message.sender_id, "response", final_response, message.request_id)

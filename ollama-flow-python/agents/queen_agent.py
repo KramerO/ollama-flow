@@ -29,7 +29,7 @@ class QueenAgent(BaseAgent):
     async def _decompose_task(self, task: str) -> List[str]:
         decomposition_prompt = f"Given the main task: '{task}'. Decompose this into a list of smaller, actionable subtasks. Respond only with a JSON array of strings, where each string is a subtask. Example: ['Subtask 1', 'Subtask 2']"
         try:
-            response = await ollama.chat(
+            response = ollama.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": decomposition_prompt}],
             )
