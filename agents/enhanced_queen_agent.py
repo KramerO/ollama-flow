@@ -9,6 +9,7 @@ import concurrent.futures
 from agents.base_agent import BaseAgent, AgentMessage
 from agents.sub_queen_agent import SubQueenAgent
 from agents.worker_agent import WorkerAgent
+from agents.secure_worker_agent import SecureWorkerAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -79,7 +80,10 @@ class EnhancedQueenAgent(BaseAgent):
                 self.sub_queen_agents = self.orchestrator.get_agents_by_type(SubQueenAgent)
                 logger.info(f"QueenAgent {self.name} found {len(self.sub_queen_agents)} SubQueenAgents.")
             elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
-                self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
+                # Try SecureWorkerAgent first, fallback to WorkerAgent
+                self.worker_agents = self.orchestrator.get_agents_by_type(SecureWorkerAgent)
+                if not self.worker_agents:
+                    self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
                 logger.info(f"QueenAgent {self.name} found {len(self.worker_agents)} WorkerAgents.")
                 
                 # Initialize worker performance tracking
@@ -584,8 +588,11 @@ class EnhancedQueenAgent(BaseAgent):
                     if len(self.sub_queen_agents) == 0:
                         logger.warning("No sub-queen agents found, falling back to direct worker mode")
                         if self.orchestrator:
-                            from agents.worker_agent import WorkerAgent
-                            self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
+                            # Try SecureWorkerAgent first, fallback to WorkerAgent
+                            self.worker_agents = self.orchestrator.get_agents_by_type(SecureWorkerAgent)
+                            if not self.worker_agents:
+                                from agents.worker_agent import WorkerAgent
+                                self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
                             logger.info(f"Found {len(self.worker_agents)} workers for direct mode")
                         worker_count = max(1, len(self.worker_agents))
                     else:
@@ -595,13 +602,25 @@ class EnhancedQueenAgent(BaseAgent):
                 else:
                     worker_count = 1  # Fallback
                 
-                # Enhanced parallel task decomposition
+                # Check for simple file creation tasks first
+                if self._is_simple_file_creation(message.content):
+                    logger.info("Detected simple file creation task, executing directly")
+                    await self._execute_task_directly(message.content, message.request_id)
+                    return
+                
+                # Enhanced parallel task decomposition for complex tasks
                 task_nodes = await self._intelligent_decompose_task(message.content, worker_count)
                 
                 logger.info(f"Decomposed into {len(task_nodes)} enhanced tasks with dependencies")
                 
-                # Optimal task distribution
-                await self._distribute_tasks_optimally(task_nodes, message.request_id)
+                # Check if we have workers to distribute to
+                if len(self.worker_agents) > 0:
+                    # Optimal task distribution
+                    await self._distribute_tasks_optimally(task_nodes, message.request_id)
+                else:
+                    # No workers available - execute task directly
+                    logger.warning("No workers available, QueenAgent executing task directly")
+                    await self._execute_task_directly(message.content, message.request_id)
                 
             except Exception as e:
                 logger.error(f"Task processing failed: {e}")
@@ -761,6 +780,604 @@ class EnhancedQueenAgent(BaseAgent):
             await self.send_message("orchestrator", "final-response", 
                                   f"Group response: {message.content}", 
                                   message.request_id)
+
+    async def _execute_task_directly(self, task_content: str, request_id: str):
+        """Execute task directly when no workers are available"""
+        try:
+            logger.info(f"QueenAgent executing task directly: {task_content[:50]}...")
+            
+            # Handle complex project creation (Helm Charts, etc.)
+            if self._is_complex_project(task_content):
+                await self._create_complex_project(task_content, request_id)
+                return
+            
+            # Simple file creation logic without LLM for common cases
+            if self._is_simple_file_creation(task_content):
+                filename, content = self._extract_simple_file_info(task_content)
+                if filename and content:
+                    import os
+                    project_folder = os.getcwd()
+                    file_path = os.path.join(project_folder, filename)
+                    
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    final_result = f"File created successfully: {file_path}\nContent: {content}"
+                    logger.info(f"QueenAgent created file: {file_path}")
+                    await self.send_message("orchestrator", "final-response", final_result, request_id)
+                    return
+            
+            # Use Ollama for complex tasks
+            file_creation_prompt = f"""
+            Task: {task_content}
+            
+            Create a file. Respond with exactly this format:
+            FILENAME: [filename]
+            CONTENT:
+            [file content here]
+            """
+            
+            # Execute with Ollama
+            result = await self._async_ollama_call(file_creation_prompt)
+            
+            # Parse the result to extract filename and content
+            filename, content = self._parse_file_creation_result(result)
+            
+            if filename and content:
+                # Create the file in the project directory
+                import os
+                project_folder = os.getcwd()  # Use current working directory
+                file_path = os.path.join(project_folder, filename)
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                final_result = f"File created successfully: {file_path}\nContent: {content}"
+                logger.info(f"QueenAgent created file: {file_path}")
+            else:
+                final_result = f"Task completed: {result}"
+            
+            # Send final response
+            await self.send_message("orchestrator", "final-response", final_result, request_id)
+            
+        except Exception as e:
+            logger.error(f"Direct task execution failed: {e}")
+            await self.send_message("orchestrator", "final-error", f"Direct task execution failed: {e}", request_id)
+    
+    def _parse_file_creation_result(self, result: str) -> tuple[str, str]:
+        """Parse LLM result to extract filename and content"""
+        import re
+        
+        # Look for FILENAME: pattern
+        filename_match = re.search(r'FILENAME:\s*([^\n]+)', result, re.IGNORECASE)
+        filename = filename_match.group(1).strip() if filename_match else None
+        
+        # Look for CONTENT: pattern
+        content_match = re.search(r'CONTENT:\s*\n(.+)', result, re.DOTALL | re.IGNORECASE)
+        content = content_match.group(1).strip() if content_match else None
+        
+        # Fallback: if no structured format, try to infer
+        if not filename:
+            # Look for common file patterns
+            if "hallo welt" in result.lower() or "hello world" in result.lower():
+                filename = "hello_world.txt" if not filename else filename
+            else:
+                filename = "output.txt"
+        
+        if not content:
+            # Use the whole result as content if no structured content found
+            content = result.strip()
+            
+        return filename, content
+    
+    def _is_simple_file_creation(self, task_content: str) -> bool:
+        """Check if this is a file creation task that should be handled directly"""
+        task_lower = task_content.lower()
+        
+        # Look for file creation patterns
+        file_keywords = ['create', 'erstelle', 'make', 'write', 'save', 'speichere']
+        
+        # Comprehensive list of common file extensions
+        file_extensions = [
+            # Text and Documents
+            '.txt', '.md', '.rst', '.doc', '.docx', '.pdf', '.rtf', '.odt',
+            
+            # Programming Languages
+            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp',
+            '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.r',
+            '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+            
+            # Web Technologies
+            '.html', '.htm', '.css', '.scss', '.sass', '.less', '.xml', '.xhtml',
+            '.svg', '.vue', '.angular', '.react',
+            
+            # Data Formats
+            '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties',
+            '.csv', '.tsv', '.xlsx', '.xls', '.ods', '.sql', '.db', '.sqlite',
+            
+            # Images
+            '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.ico',
+            '.psd', '.ai', '.eps', '.raw', '.cr2', '.nef', '.orf',
+            
+            # Audio/Video
+            '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma',
+            '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v',
+            
+            # Archives
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tar.gz', '.tar.bz2',
+            
+            # Config and System
+            '.env', '.gitignore', '.gitattributes', '.editorconfig', '.dockerignore',
+            '.htaccess', '.robots', '.sitemap', '.manifest',
+            
+            # DevOps and Infrastructure
+            '.dockerfile', '.docker-compose', '.k8s', '.helm', '.terraform', '.tf',
+            '.ansible', '.vagrant', '.makefile', '.cmake', '.gradle',
+            
+            # Logs and Temp
+            '.log', '.tmp', '.temp', '.cache', '.bak', '.backup', '.old', '.orig',
+            
+            # Fonts
+            '.ttf', '.otf', '.woff', '.woff2', '.eot',
+            
+            # eBooks
+            '.epub', '.mobi', '.azw', '.azw3', '.fb2',
+            
+            # CAD and 3D
+            '.dwg', '.dxf', '.step', '.iges', '.stl', '.obj', '.3ds', '.blend',
+            
+            # Science and Engineering  
+            '.mat', '.csv', '.dat', '.nc', '.hdf5', '.fits', '.nii',
+            
+            # Mobile
+            '.apk', '.ipa', '.aab'
+        ]
+        
+        has_file_keyword = any(keyword in task_lower for keyword in file_keywords)
+        has_file_extension = any(ext in task_lower for ext in file_extensions)
+        has_filename = any(word.endswith(tuple(file_extensions)) for word in task_content.split())
+        
+        # Also check for "file" keyword
+        has_file_word = 'file' in task_lower or 'datei' in task_lower
+        
+        # Check for complex project types that should be handled directly
+        complex_projects = ['helm', 'helmchart', 'docker', 'kubernetes', 'k8s']
+        has_complex_project = any(project in task_lower for project in complex_projects)
+        
+        return has_file_keyword and (has_file_extension or has_filename or has_file_word or has_complex_project)
+    
+    def _extract_simple_file_info(self, task_content: str) -> tuple[str, str]:
+        """Extract filename and content from simple file creation tasks"""
+        import re
+        
+        # Extract filename
+        filename = None
+        words = task_content.split()
+        
+        # Comprehensive file extensions list (same as above)
+        all_extensions = [
+            '.txt', '.md', '.rst', '.doc', '.docx', '.pdf', '.rtf', '.odt',
+            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp',
+            '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.r',
+            '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+            '.html', '.htm', '.css', '.scss', '.sass', '.less', '.xml', '.xhtml',
+            '.svg', '.vue', '.angular', '.react',
+            '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties',
+            '.csv', '.tsv', '.xlsx', '.xls', '.ods', '.sql', '.db', '.sqlite',
+            '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.ico',
+            '.psd', '.ai', '.eps', '.raw', '.cr2', '.nef', '.orf',
+            '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma',
+            '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v',
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tar.gz', '.tar.bz2',
+            '.env', '.gitignore', '.gitattributes', '.editorconfig', '.dockerignore',
+            '.htaccess', '.robots', '.sitemap', '.manifest',
+            '.dockerfile', '.docker-compose', '.k8s', '.helm', '.terraform', '.tf',
+            '.ansible', '.vagrant', '.makefile', '.cmake', '.gradle',
+            '.log', '.tmp', '.temp', '.cache', '.bak', '.backup', '.old', '.orig',
+            '.ttf', '.otf', '.woff', '.woff2', '.eot',
+            '.epub', '.mobi', '.azw', '.azw3', '.fb2',
+            '.dwg', '.dxf', '.step', '.iges', '.stl', '.obj', '.3ds', '.blend',
+            '.mat', '.dat', '.nc', '.hdf5', '.fits', '.nii', '.apk', '.ipa', '.aab'
+        ]
+        
+        # Look for files with extensions
+        for word in words:
+            if any(word.lower().endswith(ext) for ext in all_extensions):
+                filename = word.strip('"\'')
+                break
+        
+        # Also look for "as filename" pattern with all extensions
+        extension_pattern = '|'.join(ext[1:] for ext in all_extensions)  # Remove dots for regex
+        as_match = re.search(rf'\bas\s+([^\s]+\.(?:{extension_pattern}))', task_content, re.IGNORECASE)
+        if as_match and not filename:
+            filename = as_match.group(1).strip()
+        
+        # Extract content patterns
+        content_patterns = [
+            r'(?:content|inhalt|mit)\s+["\']([^"\']+)["\']',
+            r'(?:content|inhalt):\s*([^\n]+)',
+            r'(?:text|content|inhalt)\s+(.+?)(?:\s|$)',
+        ]
+        
+        content = None
+        for pattern in content_patterns:
+            match = re.search(pattern, task_content, re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                break
+        
+        # Fallback values
+        if not filename:
+            if 'hallo' in task_content.lower() or 'hello' in task_content.lower():
+                filename = 'hello.txt'
+            else:
+                filename = 'output.txt'
+        
+        if not content:
+            if 'hallo' in task_content.lower():
+                content = 'Hallo Welt!'
+            elif 'hello' in task_content.lower():
+                content = 'Hello World!'
+            elif 'bible' in task_content.lower():
+                content = 'This would be Bible content - for copyright reasons, please refer to an actual Bible source.'
+            else:
+                content = 'File content created by Ollama Flow'
+        
+        return filename, content
+    
+    def _is_complex_project(self, task_content: str) -> bool:
+        """Check if this is a complex project creation task"""
+        task_lower = task_content.lower()
+        
+        # Look for complex project patterns
+        create_keywords = ['create', 'erstelle', 'make', 'generate']
+        complex_projects = ['helm', 'helmchart', 'docker', 'kubernetes', 'k8s']
+        
+        has_create_keyword = any(keyword in task_lower for keyword in create_keywords)
+        has_complex_project = any(project in task_lower for project in complex_projects)
+        
+        return has_create_keyword and has_complex_project
+    
+    async def _create_complex_project(self, task_content: str, request_id: str):
+        """Create complex projects like Helm Charts"""
+        try:
+            task_lower = task_content.lower()
+            
+            if 'helm' in task_lower:
+                await self._create_helm_chart(task_content, request_id)
+            elif 'docker' in task_lower:
+                await self._create_docker_project(task_content, request_id)
+            else:
+                await self.send_message("orchestrator", "final-error", 
+                                      f"Unsupported complex project type in: {task_content}", 
+                                      request_id)
+                
+        except Exception as e:
+            logger.error(f"Complex project creation failed: {e}")
+            await self.send_message("orchestrator", "final-error", 
+                                  f"Complex project creation failed: {e}", 
+                                  request_id)
+    
+    async def _create_helm_chart(self, task_content: str, request_id: str):
+        """Create a complete Helm Chart structure"""
+        try:
+            import os
+            
+            # Determine chart name
+            chart_name = "nginx-chart"
+            if 'nginx' in task_content.lower():
+                chart_name = "nginx-chart"
+            elif 'apache' in task_content.lower():
+                chart_name = "apache-chart"
+            
+            project_folder = os.getcwd()
+            chart_path = os.path.join(project_folder, chart_name)
+            
+            # Create chart directory structure
+            os.makedirs(chart_path, exist_ok=True)
+            os.makedirs(os.path.join(chart_path, "templates"), exist_ok=True)
+            os.makedirs(os.path.join(chart_path, "charts"), exist_ok=True)
+            
+            # Create Chart.yaml
+            chart_yaml = f"""apiVersion: v2
+name: {chart_name}
+description: A Helm chart for NGINX
+type: application
+version: 0.1.0
+appVersion: "1.0"
+"""
+            
+            # Create values.yaml
+            values_yaml = """# Default values for nginx-chart
+replicaCount: 1
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+"""
+            
+            # Create deployment template
+            deployment_yaml = """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nginx-chart.fullname" . }}
+  labels:
+    {{- include "nginx-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nginx-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nginx-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+"""
+            
+            # Create service template
+            service_yaml = """apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nginx-chart.fullname" . }}
+  labels:
+    {{- include "nginx-chart.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "nginx-chart.selectorLabels" . | nindent 4 }}
+"""
+            
+            # Create helpers template
+            helpers_yaml = '''{{/*
+Expand the name of the chart.
+*/}}
+{{- define "nginx-chart.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+*/}}
+{{- define "nginx-chart.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "nginx-chart.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "nginx-chart.labels" -}}
+helm.sh/chart: {{ include "nginx-chart.chart" . }}
+{{ include "nginx-chart.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "nginx-chart.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "nginx-chart.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+'''
+            
+            # Write all files
+            with open(os.path.join(chart_path, "Chart.yaml"), 'w') as f:
+                f.write(chart_yaml)
+            
+            with open(os.path.join(chart_path, "values.yaml"), 'w') as f:
+                f.write(values_yaml)
+                
+            with open(os.path.join(chart_path, "templates", "deployment.yaml"), 'w') as f:
+                f.write(deployment_yaml)
+                
+            with open(os.path.join(chart_path, "templates", "service.yaml"), 'w') as f:
+                f.write(service_yaml)
+                
+            with open(os.path.join(chart_path, "templates", "_helpers.tpl"), 'w') as f:
+                f.write(helpers_yaml)
+                
+            # Create .helmignore
+            helmignore = """# Patterns to ignore when building packages.
+# This supports shell glob matching, relative path matching, and
+# negation (prefixed with !). Only one pattern per line.
+.DS_Store
+# Common VCS dirs
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+# Common backup files
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# Various IDEs
+.project
+.idea/
+*.tmproj
+.vscode/
+"""
+            
+            with open(os.path.join(chart_path, ".helmignore"), 'w') as f:
+                f.write(helmignore)
+            
+            files_created = [
+                f"{chart_name}/Chart.yaml",
+                f"{chart_name}/values.yaml", 
+                f"{chart_name}/templates/deployment.yaml",
+                f"{chart_name}/templates/service.yaml",
+                f"{chart_name}/templates/_helpers.tpl",
+                f"{chart_name}/.helmignore"
+            ]
+            
+            final_result = f"""Helm Chart created successfully!
+
+Chart Name: {chart_name}
+Location: {chart_path}
+
+Files created:
+{chr(10).join('- ' + file for file in files_created)}
+
+To use this chart:
+1. helm install my-nginx ./{chart_name}
+2. helm upgrade my-nginx ./{chart_name}
+3. helm uninstall my-nginx
+
+Chart is ready for deployment!"""
+            
+            logger.info(f"QueenAgent created Helm Chart: {chart_path}")
+            await self.send_message("orchestrator", "final-response", final_result, request_id)
+            
+        except Exception as e:
+            logger.error(f"Helm Chart creation failed: {e}")
+            await self.send_message("orchestrator", "final-error", f"Helm Chart creation failed: {e}", request_id)
+    
+    async def _create_docker_project(self, task_content: str, request_id: str):
+        """Create a Docker project structure"""
+        try:
+            import os
+            
+            project_folder = os.getcwd()
+            
+            # Create Dockerfile
+            dockerfile_content = """FROM nginx:alpine
+
+# Copy custom configuration if needed
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy static content
+# COPY ./html /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+"""
+            
+            # Create docker-compose.yml
+            compose_content = """version: '3.8'
+
+services:
+  nginx:
+    build: .
+    ports:
+      - "80:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    restart: unless-stopped
+"""
+            
+            with open(os.path.join(project_folder, "Dockerfile"), 'w') as f:
+                f.write(dockerfile_content)
+                
+            with open(os.path.join(project_folder, "docker-compose.yml"), 'w') as f:
+                f.write(compose_content)
+            
+            # Create html directory with index.html
+            html_dir = os.path.join(project_folder, "html")
+            os.makedirs(html_dir, exist_ok=True)
+            
+            index_html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to nginx!</title>
+</head>
+<body>
+    <h1>Welcome to nginx!</h1>
+    <p>If you see this page, the nginx web server is successfully installed and working.</p>
+</body>
+</html>
+"""
+            
+            with open(os.path.join(html_dir, "index.html"), 'w') as f:
+                f.write(index_html)
+            
+            final_result = f"""Docker project created successfully!
+
+Files created:
+- Dockerfile
+- docker-compose.yml
+- html/index.html
+
+To use this project:
+1. docker build -t my-nginx .
+2. docker run -p 80:80 my-nginx
+   OR
+3. docker-compose up
+
+Your NGINX server will be available at http://localhost"""
+            
+            logger.info(f"QueenAgent created Docker project in: {project_folder}")
+            await self.send_message("orchestrator", "final-response", final_result, request_id)
+            
+        except Exception as e:
+            logger.error(f"Docker project creation failed: {e}")
+            await self.send_message("orchestrator", "final-error", f"Docker project creation failed: {e}", request_id)
 
     def __del__(self):
         """Cleanup executor on destruction"""

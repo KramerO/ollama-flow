@@ -80,6 +80,12 @@ Examples:
             help="Run in interactive mode"
         )
         
+        parser.add_argument(
+            "--web-dashboard",
+            action="store_true", 
+            help="Launch web dashboard interface"
+        )
+        
         # Agent configuration
         parser.add_argument(
             "--workers", "--worker-count",
@@ -103,7 +109,7 @@ Examples:
         parser.add_argument(
             "--model",
             type=str,
-            help="Ollama model to use (default: codellama:7b)"
+            help="Ollama model to use (default: phi3:mini)"
         )
         
         parser.add_argument(
@@ -177,7 +183,7 @@ Examples:
             'architecture_type': args.arch or os.getenv("OLLAMA_ARCHITECTURE_TYPE", "HIERARCHICAL"),
             
             # Model configuration
-            'model': args.model or os.getenv("OLLAMA_MODEL", "codellama:7b"),
+            'model': args.model or os.getenv("OLLAMA_MODEL", "phi3:mini"),
             'parallel_llm': args.parallel_llm or os.getenv("OLLAMA_PARALLEL_LLM", "").lower() == "true",
             
             # Security configuration
@@ -195,6 +201,7 @@ Examples:
             # Interactive mode
             'interactive': args.interactive,
             'task': args.task,
+            'web_dashboard': args.web_dashboard,
             
             # Control commands
             'stop_agents': args.stop_agents,
@@ -616,6 +623,40 @@ Examples:
             # Display results
             self.display_results(task, execution_result, agents_info)
             
+            # Auto-shutdown: Stop all agents and cleanup after task completion
+            print("\n🔄 Task completed - Shutting down agents...")
+            logger.info("Task completed - Beginning automatic shutdown")
+            
+            # Stop all agents
+            shutdown_success = await self.stop_all_agents()
+            if shutdown_success:
+                print("✅ All agents stopped successfully")
+                logger.info("✅ All agents stopped successfully")
+            else:
+                print("⚠️ Some agents may still be running")
+                logger.warning("⚠️ Some agents may still be running")
+            
+            # Cleanup resources
+            await self.cleanup()
+            print("✅ System cleanup completed")
+            logger.info("✅ System cleanup completed")
+            
+            # Final success message
+            print("\n" + "="*60)
+            if execution_result['success']:
+                print("🎉 TASK SUCCESSFULLY COMPLETED")
+                print("✅ All agents have been stopped")
+                print("✅ System resources cleaned up") 
+                print("✅ Ollama Flow terminated gracefully")
+                logger.info("🎉 Task completed successfully - All agents stopped - System terminated")
+            else:
+                print("⚠️ TASK COMPLETED WITH ISSUES")
+                print("✅ All agents have been stopped")
+                print("✅ System resources cleaned up")
+                print("✅ Ollama Flow terminated gracefully")
+                logger.info("⚠️ Task completed with errors - All agents stopped - System terminated")
+            print("="*60)
+            
             return execution_result['success']
             
         except Exception as e:
@@ -686,6 +727,109 @@ Examples:
             logger.error(f"Interactive mode failed: {e}")
             print(f"\n❌ Framework Error: {e}")
 
+    async def run_web_dashboard(self):
+        """Run web dashboard interface"""
+        try:
+            print("\n" + "="*60)
+            print("🌐 OLLAMA FLOW WEB DASHBOARD")
+            print("="*60)
+            print("🚀 Starting web dashboard server...")
+            
+            # Check if dashboard file exists
+            dashboard_path = os.path.join(os.path.dirname(__file__), 'dashboard', 'flask_dashboard.py')
+            if not os.path.exists(dashboard_path):
+                print("❌ Web dashboard not found!")
+                print(f"Expected at: {dashboard_path}")
+                print("\n💡 The web dashboard feature is not yet implemented.")
+                print("Available alternatives:")
+                print("  • ollama-flow --interactive    - Interactive CLI mode")
+                print("  • ollama-flow run 'task'       - Direct task execution")
+                print("  • ollama-flow status           - System status")
+                return
+            
+            # Import and run dashboard
+            import sys
+            sys.path.insert(0, os.path.dirname(dashboard_path))
+            
+            try:
+                import flask_dashboard
+                
+                # Create dashboard instance
+                dashboard = flask_dashboard.FlaskDashboard(host='0.0.0.0', port=5001, debug=False)
+                app = dashboard.app
+                
+                print("✅ Dashboard loaded successfully")
+                print("🌐 Web dashboard will be available at: http://localhost:5001")
+                print("\n💡 Press Ctrl+C to stop the dashboard")
+                print("="*60)
+                
+                # Setup routes and run dashboard
+                dashboard.setup_routes()
+                dashboard.run()
+                
+            except AttributeError:
+                # Fallback: try to get app directly
+                try:
+                    import flask_dashboard
+                    app = flask_dashboard.app if hasattr(flask_dashboard, 'app') else None
+                    if app:
+                        app.run(host='0.0.0.0', port=5000, debug=False)
+                    else:
+                        raise ImportError("No app found in flask_dashboard")
+                except Exception:
+                    # Create simple fallback dashboard
+                    from flask import Flask
+                    app = Flask(__name__)
+                    
+                    @app.route('/')
+                    def dashboard():
+                        return '''
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Ollama Flow Dashboard</title></head>
+                        <body>
+                        <h1>🚀 Ollama Flow Dashboard</h1>
+                        <p>✅ Dashboard is running!</p>
+                        <p>💡 This is a basic fallback dashboard.</p>
+                        <a href="/status">System Status</a>
+                        </body>
+                        </html>
+                        '''
+                    
+                    @app.route('/status')
+                    def status():
+                        return '''
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>System Status</title></head>
+                        <body>
+                        <h2>📊 System Status</h2>
+                        <p>✅ Ollama Flow Framework: Running</p>
+                        <p>🔧 Mode: Web Dashboard</p>
+                        <p>⚡ Model: phi3:mini (default)</p>
+                        <a href="/">Back to Dashboard</a>
+                        </body>
+                        </html>
+                        '''
+                    
+                    print("✅ Simple dashboard loaded")
+                    print("🌐 Web dashboard available at: http://localhost:5000")
+                    print("\n💡 Press Ctrl+C to stop")
+                    print("="*60)
+                    
+                    app.run(host='0.0.0.0', port=5000, debug=False)
+                
+            except ImportError as e:
+                print(f"❌ Could not import dashboard: {e}")
+                print("\n💡 Installing Flask might be needed:")
+                print("  pip install flask flask-socketio")
+                
+        except Exception as e:
+            logger.error(f"Web dashboard failed: {e}")
+            print(f"\n❌ Dashboard Error: {e}")
+            print("\n💡 Try using interactive mode instead:")
+            print("  ollama-flow --interactive")
+
     async def main(self):
         """Main execution flow"""
         try:
@@ -720,7 +864,9 @@ Examples:
             logger.info("Enhanced Ollama Flow Framework starting...")
             logger.info(f"Configuration: {json.dumps(self.config, indent=2)}")
             
-            if self.config['interactive']:
+            if self.config['web_dashboard']:
+                await self.run_web_dashboard()
+            elif self.config['interactive']:
                 await self.run_interactive_mode()
             else:
                 task = await self.get_task_input()

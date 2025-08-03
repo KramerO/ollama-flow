@@ -417,6 +417,7 @@ main() {
     echo "📍 Installation Directory: $INSTALL_DIR"
     echo "🔧 CLI Command: ollama-flow"
     echo "📚 Documentation: https://github.com/ruvnet/ollama-flow"
+    echo "🗑️ To uninstall: bash uninstall.sh"
     echo ""
     echo "Happy AI orchestrating! 🚀"
 }
