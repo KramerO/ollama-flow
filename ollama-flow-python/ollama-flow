@@ -122,7 +122,8 @@ def run_enhanced_main(args):
 
 def run_dashboard(args):
     """Run the web dashboard"""
-    cmd = [sys.executable, str(SCRIPT_DIR / "dashboard" / "flask_dashboard.py")]
+    # Use simple dashboard to avoid async issues
+    cmd = [sys.executable, str(SCRIPT_DIR / "dashboard" / "simple_dashboard.py")]
     
     if args.host:
         cmd.extend(["--host", args.host])
