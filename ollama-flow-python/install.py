@@ -128,8 +128,14 @@ Version: 2.0.0
                 python_path = venv_path / "bin" / "python"
                 pip_path = venv_path / "bin" / "pip"
             
-            # Upgrade pip
-            subprocess.run([str(pip_path), "install", "--upgrade", "pip"], check=True)
+            # Upgrade pip (skip on Windows if it fails)
+            try:
+                subprocess.run([str(pip_path), "install", "--upgrade", "pip"], check=True)
+            except subprocess.CalledProcessError:
+                if self.system == "windows":
+                    print("⚠️ Skipping pip upgrade on Windows (not critical)")
+                else:
+                    raise
             
             # Install requirements
             for req in requirements:
