@@ -1,73 +1,74 @@
-# Ollama Flow - Enhanced AI Orchestration Framework
+# Enhanced Ollama Flow - Professional AI Orchestration Framework
 
-Ollama Flow is an enterprise-grade multi-agent AI orchestration system that seamlessly integrates with Ollama models to execute complex tasks through intelligent agent coordination. The framework features both a Node.js backend for lightweight operations and an enhanced Python framework with neural intelligence, comprehensive monitoring, and persistent session management.
+Enhanced Ollama Flow is a next-generation, enterprise-grade multi-agent AI orchestration system that leverages advanced neural intelligence, comprehensive monitoring, and persistent session management to execute complex tasks with unprecedented efficiency and reliability.
 
-## 🚀 What's New in Version 3.1.0
+## 🚀 What's New in Enhanced Version 3.3.0
 
-- **🖥️ Windows CLI Wrapper**: Unified command-line interface with `ollama-flow` commands
-- **🧠 Neural Intelligence Engine**: Pattern recognition and adaptive learning from task execution
-- **🛠️ MCP Tools Ecosystem**: 24+ specialized tools across 8 categories for advanced coordination
-- **📊 Real-time Monitoring**: Comprehensive system health, performance analytics, and intelligent alerting
-- **💾 Session Management**: Persistent state management with cross-session memory and recovery
-- **⚡ Performance Boost**: 84.8% SWE-Bench solve rate with 2.8-4.4x speed improvements
+- **🧠 Neural Intelligence Engine**: Advanced pattern recognition, adaptive learning, and optimization from task execution
+- **🛠️ MCP Tools Ecosystem**: 50+ specialized tools across 8 categories for comprehensive task automation
+- **📊 Real-time Monitoring System**: Advanced system health monitoring, performance analytics, and intelligent alerting
+- **💾 Persistent Session Management**: Cross-session memory, state recovery, and workflow continuity
+- **🌐 Enhanced Web Dashboard**: Real-time visualization, control interface, and system insights
+- **⚡ Performance Excellence**: 84.8% SWE-Bench solve rate with 4.4x speed improvements
+- **🔒 Enterprise Security**: Advanced sandboxing, validation, and security features
 
 ## 🎯 Quick Start
 
-### Windows (Recommended)
-```cmd
-# Clone repository
-git clone https://github.com/KramerO/ollama-flow.git
-cd ollama-flow
-
-# One-command installation
-install_windows.bat
-
-# Use CLI wrapper (after PATH setup)
-ollama-flow run "Create a web app" --workers 4
-ollama-flow dashboard
-```
-
-### Linux/macOS
+### Enhanced Installation (Linux/macOS)
 ```bash
 # Clone repository
 git clone https://github.com/KramerO/ollama-flow.git
 cd ollama-flow
 
-# Setup Node.js backend
-npm install && npm run build
+# Run Enhanced installer (one command setup)
+python3 install.py
 
-# Setup Python framework
-cd ollama-flow-python
+# Use Enhanced CLI (after installation)
+ollama-flow --task "Create a REST API with authentication" --workers 4
+ollama-flow dashboard
+ollama-flow monitor
+```
+
+### Manual Enhanced Setup
+```bash
+# Clone repository
+git clone https://github.com/KramerO/ollama-flow.git
+cd ollama-flow
+
+# Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
+
+# Install Enhanced dependencies
 pip install -r requirements.txt
 
-# Run enhanced framework
+# Run Enhanced framework directly
 python enhanced_main.py --task "Your task here" --workers 4
 ```
 
-## 🌟 Core Features
+## 🌟 Enhanced Core Features
 
-### Multi-Agent Architecture
+### Advanced Multi-Agent Architecture
 - **Hierarchical Coordination**: Queen and Sub-Queen agents orchestrate worker agents
 - **Flexible Topologies**: HIERARCHICAL, CENTRALIZED, or FULLY_CONNECTED architectures
 - **Intelligent Task Decomposition**: Complex tasks broken into manageable subtasks
 - **Parallel Execution**: Concurrent task processing for maximum efficiency
 
 ### Enhanced Framework Features
-- **Neural Intelligence**: Learning from execution patterns and optimizing performance
-- **MCP Tools**: 24+ specialized tools for orchestration, analysis, and automation
-- **Real-time Monitoring**: System health, resource usage, and performance metrics
-- **Session Persistence**: Resume interrupted tasks and maintain context across sessions
-- **Security Modes**: Sandboxed execution with configurable security levels
+- **🧠 Neural Intelligence**: Advanced learning from execution patterns and performance optimization
+- **🛠️ MCP Tools Ecosystem**: 50+ specialized tools across 8 categories for comprehensive automation
+- **📊 Real-time Monitoring**: Advanced system health, resource usage, and performance analytics
+- **💾 Session Persistence**: Resume interrupted tasks and maintain context across sessions
+- **🔒 Security Modes**: Advanced sandboxed execution with configurable security levels
+- **🌐 Enhanced Dashboard**: Real-time web interface with system insights and control
 
-### Windows CLI Integration
-- **Unified Interface**: Access all features through `ollama-flow` commands
-- **Global Access**: System-wide CLI availability after PATH integration
-- **Rich Command Set**: 24+ commands for task execution, system management, and development
-- **PowerShell Support**: Advanced PowerShell wrapper with parameter validation
+### Enhanced CLI Integration
+- **Unified Interface**: Access all Enhanced features through `ollama-flow` commands
+- **Global Access**: System-wide CLI availability after automated installation
+- **Advanced Command Set**: 30+ commands for task execution, monitoring, and system management
+- **Smart Routing**: Intelligent command routing to appropriate Enhanced components
 
-## 🏗️ Project Structure
+## 🏗️ Enhanced Project Structure
 
 ```
 ollama-flow/
@@ -103,40 +104,48 @@ ollama-flow/
 └── tsconfig.json                  # TypeScript configuration
 ```
 
-## 🚀 Usage Examples
+## 🚀 Enhanced Usage Examples
 
-### Windows CLI Commands
-```cmd
-# Task Execution
-ollama-flow run "Build a REST API with authentication" --workers 6 --arch HIERARCHICAL --secure
-ollama-flow enhanced --task "Create ML pipeline" --metrics --benchmark
+### Enhanced CLI Commands (After Installation)
+```bash
+# Task Execution with Enhanced Framework
+ollama-flow --task "Build a REST API with authentication" --workers 6 --architecture-type HIERARCHICAL
+ollama-flow --task "Create ML pipeline with data processing" --workers 4
 
-# Dashboard Management
-ollama-flow dashboard              # Web UI at localhost:5000
-ollama-flow cli                   # Interactive CLI dashboard
-ollama-flow sessions              # Session management
+# Enhanced Dashboard & Monitoring
+ollama-flow dashboard             # Enhanced Web UI at localhost:5000
+ollama-flow monitor               # System monitoring interface
+ollama-flow neural               # Neural Intelligence interface
+ollama-flow session              # Session management interface
 
 # System Management
-ollama-flow status                # System health check
-ollama-flow models pull codellama:7b
-ollama-flow benchmark             # Performance testing
-ollama-flow help                  # Complete command reference
+ollama-flow --help               # Complete Enhanced command reference
 ```
 
-### Enhanced Python Framework
+### Direct Enhanced Python Framework
 ```bash
-# Basic usage
+# Basic Enhanced usage
 python enhanced_main.py --task "Develop a web application" --workers 4
 
-# Advanced usage with all features
+# Advanced Enhanced usage with all features
 python enhanced_main.py \
   --task "Build e-commerce platform with React, Node.js, and MongoDB" \
   --workers 8 \
-  --arch HIERARCHICAL \
+  --architecture-type HIERARCHICAL \
   --project-folder ./ecommerce \
-  --secure \
-  --metrics \
-  --benchmark
+  --ollama-model codellama:7b
+```
+
+### Enhanced Dashboard Features
+```bash
+# Start Enhanced Web Dashboard
+python cli_dashboard.py
+
+# Direct monitoring access
+python -c "from monitoring_system import MonitoringSystem; MonitoringSystem().start_monitoring()"
+
+# Neural Intelligence status
+python -c "from neural_intelligence import NeuralIntelligenceEngine; print(NeuralIntelligenceEngine().get_status())"
 ```
 
 ### Node.js Backend (Legacy)

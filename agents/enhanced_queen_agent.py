@@ -227,31 +227,83 @@ class EnhancedQueenAgent(BaseAgent):
             return {"primary_skills": ["general"]}
 
     async def _generate_parallel_subtasks(self, task: str, worker_count: int) -> List[str]:
-        """Generate subtasks optimized for parallel execution"""
-        prompt = f"""Decompose this task into {worker_count} parallel subtasks: '{task}'
+        """Generate subtasks optimized for parallel execution with command-line focus"""
+        # Command-line focused task decomposition
+        if "flask" in task.lower() and "app" in task.lower():
+            return [
+                f"Use command-line tools to create Flask application: {task}",
+                "Execute any required setup commands and save the application",
+                "Verify the created application works correctly"
+            ]
+        elif "web" in task.lower() and ("scraper" in task.lower() or "scraping" in task.lower()):
+            return [
+                f"Use command-line tools to create web scraper: {task}",
+                "Install required dependencies and create the scraper code",
+                "Test and save the completed scraper application"
+            ]
+        elif "api" in task.lower() and "rest" in task.lower():
+            return [
+                f"Use command-line tools to create REST API: {task}",
+                "Set up the API structure and implement endpoints", 
+                "Test the API and ensure it's properly saved"
+            ]
+        elif any(keyword in task.lower() for keyword in ["create", "build", "make", "develop", "generate"]):
+            return [
+                f"Analyze requirements and use appropriate command-line tools for: {task}",
+                f"Execute the necessary commands to complete: {task}",
+                f"Verify and finalize the implementation"
+            ]
+        else:
+            # Generic command-line focused decomposition
+            return [
+                f"Use AI analysis and command-line tools to complete: {task}",
+                f"Execute any required system commands and save results",
+                f"Verify the task completion and provide feedback"
+            ]
+
+    def _extract_json_from_response(self, response: str):
+        """Extract JSON from LLM response that may contain additional text"""
+        import re
         
-        Requirements:
-        1. Tasks should be independent and parallelizable
-        2. Each task should take similar time to complete  
-        3. Minimize dependencies between tasks
-        4. Focus on maximizing worker utilization
-        5. Each subtask should be atomic and complete
-        
-        Respond with JSON array of strings:
-        ["Independent subtask 1", "Independent subtask 2", ...]
-        
-        Aim for {worker_count} subtasks to match available workers."""
-        
+        # First try direct JSON parsing
         try:
-            response = await self._async_ollama_call(prompt)
-            subtasks = json.loads(response)
-            if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
-                return subtasks
-            else:
-                raise ValueError("Invalid response format")
-        except Exception as e:
-            logger.error(f"Parallel subtask generation failed: {e}")
-            return [task]  # Fallback
+            return json.loads(response.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to find JSON array in the response
+        json_patterns = [
+            r'\[(.*?)\]',  # Look for array brackets
+            r'```json\s*(\[.*?\])\s*```',  # JSON code blocks
+            r'```\s*(\[.*?\])\s*```',  # Generic code blocks with arrays
+        ]
+        
+        for pattern in json_patterns:
+            matches = re.findall(pattern, response, re.DOTALL)
+            for match in matches:
+                try:
+                    if pattern == r'\[(.*?)\]':
+                        # Reconstruct the full array
+                        json_str = '[' + match + ']'
+                    else:
+                        json_str = match
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    continue
+        
+        # Fallback: try to extract strings that look like task descriptions
+        lines = response.strip().split('\n')
+        tasks = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#') and not line.startswith('//'):
+                # Remove common prefixes
+                line = re.sub(r'^[\d\.\-\*\+]+\s*', '', line)
+                line = line.strip('"\'')
+                if line and len(line) > 5:  # Reasonable task length
+                    tasks.append(line)
+        
+        return tasks if tasks else [response.strip()]
 
     def _parse_subtasks_response(self, response: Any) -> List[str]:
         """Parse and validate subtasks response"""
@@ -391,6 +443,18 @@ class EnhancedQueenAgent(BaseAgent):
         if not self.worker_agents:
             return None
             
+        # Initialize worker performance tracking if missing
+        for worker in self.worker_agents:
+            if worker.agent_id not in self.worker_performance:
+                self.worker_performance[worker.agent_id] = {
+                    'completed_tasks': 0,
+                    'failed_tasks': 0,
+                    'average_duration': 0.0,
+                    'skills': ['general'],  # Default skills
+                    'current_load': 0,
+                    'reliability_score': 1.0
+                }
+            
         available_workers = []
         for worker in self.worker_agents:
             worker_id = worker.agent_id
@@ -400,7 +464,7 @@ class EnhancedQueenAgent(BaseAgent):
             worker_skills = set(performance['skills'])
             required_skills = set(task_node.required_skills)
             
-            skill_match = len(worker_skills.intersection(required_skills)) / len(required_skills)
+            skill_match = len(worker_skills.intersection(required_skills)) / len(required_skills) if required_skills else 1.0
             
             # Calculate worker score
             score = (
@@ -509,8 +573,27 @@ class EnhancedQueenAgent(BaseAgent):
         
         if message.message_type == "task":
             try:
-                # Determine available worker count
-                worker_count = len(self.worker_agents) if self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED'] else len(self.sub_queen_agents) * 2
+                # Initialize agents if needed
+                if not hasattr(self, '_agents_initialized'):
+                    self.initialize_agents()
+                    self._agents_initialized = True
+                
+                # Determine available worker count - fallback for HIERARCHICAL mode
+                if self.architecture_type == 'HIERARCHICAL':
+                    # If no sub-queens found, work directly with available workers
+                    if len(self.sub_queen_agents) == 0:
+                        logger.warning("No sub-queen agents found, falling back to direct worker mode")
+                        if self.orchestrator:
+                            from agents.worker_agent import WorkerAgent
+                            self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
+                            logger.info(f"Found {len(self.worker_agents)} workers for direct mode")
+                        worker_count = max(1, len(self.worker_agents))
+                    else:
+                        worker_count = len(self.sub_queen_agents) * 2
+                elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
+                    worker_count = len(self.worker_agents)
+                else:
+                    worker_count = 1  # Fallback
                 
                 # Enhanced parallel task decomposition
                 task_nodes = await self._intelligent_decompose_task(message.content, worker_count)

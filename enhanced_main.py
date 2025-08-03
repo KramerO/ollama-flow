@@ -122,7 +122,7 @@ Examples:
         parser.add_argument(
             "--project-folder",
             type=str,
-            help="Project folder path for agent file operations"
+            help="Project folder path for agent file operations (default: current directory)"
         )
         
         # Database and logging
@@ -182,7 +182,7 @@ Examples:
             
             # Security configuration
             'secure_mode': args.secure or os.getenv("OLLAMA_SECURE_MODE", "").lower() == "true",
-            'project_folder': args.project_folder or os.getenv("OLLAMA_PROJECT_FOLDER"),
+            'project_folder': self._resolve_project_folder(args.project_folder or os.getenv("OLLAMA_PROJECT_FOLDER")),
             
             # Database and logging
             'db_path': args.db_path,
@@ -209,6 +209,28 @@ Examples:
             config['sub_queen_count'] = 2
             
         return config
+    
+    def _resolve_project_folder(self, project_folder: str = None) -> str:
+        """Resolve and validate project folder"""
+        # Use current working directory if no project folder specified
+        if not project_folder:
+            project_folder = os.getcwd()
+            print(f"🔍 No project folder specified, using current directory: {project_folder}")
+        
+        # Make sure we have absolute path
+        project_folder = os.path.abspath(project_folder)
+        
+        # Ensure project folder exists
+        if not os.path.exists(project_folder):
+            print(f"📁 Creating project folder: {project_folder}")
+            os.makedirs(project_folder, exist_ok=True)
+        
+        # Verify it's a directory
+        if not os.path.isdir(project_folder):
+            raise ValueError(f"Project folder path is not a directory: {project_folder}")
+        
+        print(f"✅ Using project folder: {project_folder}")
+        return project_folder
 
     async def setup_database(self) -> MessageDBManager:
         """Initialize database manager"""
@@ -223,7 +245,7 @@ Examples:
     async def setup_orchestrator(self, db_manager: MessageDBManager) -> Orchestrator:
         """Initialize orchestrator"""
         try:
-            orchestrator = Orchestrator(db_manager)
+            orchestrator = Orchestrator(db_manager, model=self.config['model'])
             return orchestrator
         except Exception as e:
             logger.error(f"Orchestrator initialization failed: {e}")
@@ -246,7 +268,7 @@ Examples:
                 architecture_type=self.config['architecture_type'],
                 model=self.config['model']
             )
-            orchestrator.register_agent(queen_agent)
+            # Don't initialize queen yet - wait until all agents are registered
             agents_info['queen'] = queen_agent
             agents_info['total_agents'] += 1
             
@@ -291,7 +313,8 @@ Examples:
                     
                 agents_info['sub_queens'] = sub_queen_agents
                 
-            # Initialize Queen Agent connections
+            # Register and initialize Queen Agent AFTER all other agents are registered
+            orchestrator.register_agent(queen_agent)
             queen_agent.initialize_agents()
             
             logger.info(f"Created {agents_info['total_agents']} enhanced agents:")

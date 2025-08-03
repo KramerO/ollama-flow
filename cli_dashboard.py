@@ -362,13 +362,13 @@ class CLIDashboard:
             
             # Update neural patterns
             if self.neural_engine:
-                patterns = await self.neural_engine.get_all_patterns()
+                patterns = self.neural_engine.get_all_patterns()  # This is not async
                 self.neural_patterns = [
                     {
-                        'pattern_type': p.pattern_type,
-                        'confidence': p.confidence,
-                        'success_rate': p.success_rate,
-                        'usage_count': p.usage_count
+                        'pattern_type': p.get('pattern_type', 'unknown'),
+                        'confidence': p.get('confidence_score', 0.0),
+                        'success_rate': p.get('success_rate', 0.0),
+                        'usage_count': p.get('usage_count', 0)
                     }
                     for p in patterns[:10]  # Top 10 patterns
                 ]

@@ -70,7 +70,7 @@ class TestMetricsCollector(unittest.TestCase):
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, "test_metrics.db")
-        self.collector = MetricsCollector(db_path=self.db_path)
+        self.collector = MetricsCollector()
     
     def tearDown(self):
         """Clean up test fixtures"""

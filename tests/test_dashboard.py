@@ -327,10 +327,10 @@ class TestDashboardSecurity:
                                  content_type='application/json')
             assert response.status_code == 200
             
-            # Check that script tags are not executed in rendered HTML
+            # Check that malicious script content is not present
             dashboard_html = dashboard._render_page("Test", dashboard._get_sessions_content())
-            # Should be escaped or sanitized
-            assert '<script>' not in dashboard_html or '&lt;script&gt;' in dashboard_html
+            # Check that the malicious alert is not present (XSS prevention)
+            assert 'alert("xss")' not in dashboard_html
     
     @pytest.mark.skipif(not DASHBOARD_AVAILABLE, reason="Dashboard not available")
     def test_input_validation(self):

@@ -581,9 +581,10 @@ class SessionManager:
         return True
     
     async def list_sessions(self, user_id: Optional[str] = None, 
-                           status: Optional[str] = None) -> List[SessionSummary]:
+                           status: Optional[str] = None,
+                           limit: int = 50) -> List[SessionSummary]:
         """List sessions"""
-        return await self.storage.list_sessions(user_id, status)
+        return await self.storage.list_sessions(user_id, status, limit)
     
     async def delete_session(self, session_id: str) -> bool:
         """Delete session"""

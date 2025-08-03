@@ -956,3 +956,36 @@ class NeuralIntelligenceEngine:
             'learning_active': True,
             'database_path': self.db_path
         }
+
+    async def initialize(self) -> bool:
+        """Initialize the neural intelligence engine"""
+        try:
+            # Database is already initialized in __init__
+            # Load any additional patterns or perform setup
+            logger.info("Neural Intelligence Engine initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Neural Intelligence Engine: {e}")
+            return False
+
+    def get_all_patterns(self) -> List[Dict[str, Any]]:
+        """Get all learned patterns"""
+        patterns_list = []
+        for pattern in self.patterns.values():
+            patterns_list.append({
+                'pattern_id': pattern.pattern_id,
+                'pattern_type': pattern.pattern_type,
+                'input_features': pattern.input_features,
+                'output_result': pattern.output_result,
+                'success_rate': pattern.success_rate,
+                'usage_count': pattern.usage_count,
+                'last_used': pattern.last_used,
+                'created_at': pattern.created_at,
+                'confidence_score': pattern.confidence_score,
+                'metadata': pattern.metadata
+            })
+        return patterns_list
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get neural intelligence status (alias for get_neural_status)"""
+        return self.get_neural_status()

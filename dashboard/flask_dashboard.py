@@ -69,6 +69,9 @@ class FlaskDashboard:
         
         # Initialize components (delayed until run)
         self.components_initialized = False
+        
+        # Initialize components (delayed until run)
+        self.components_initialized = False
     
     def _initialize_components_simple(self):
         """Initialize enhanced components (simplified)"""

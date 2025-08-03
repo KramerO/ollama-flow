@@ -1316,3 +1316,14 @@ class MCPToolsManager:
                 for category in MCPToolType
             }
         }
+
+    async def initialize(self) -> bool:
+        """Initialize the MCP Tools Manager"""
+        try:
+            # Database is already initialized in __init__
+            # Tools are already registered in __init__
+            logger.info("MCP Tools Manager initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize MCP Tools Manager: {e}")
+            return False

@@ -63,13 +63,14 @@ class TestEnhancedFramework:
     @pytest.fixture
     def enhanced_framework(self, temp_dir):
         """Create enhanced framework instance for testing"""
-        return EnhancedOllamaFlow(
-            task="Test task",
-            worker_count=2,
-            architecture_type="HIERARCHICAL",
-            project_folder=temp_dir,
-            db_path=os.path.join(temp_dir, "test.db")
-        )
+        framework = EnhancedOllamaFlow()
+        # Set test attributes manually
+        framework.task = "Test task"
+        framework.worker_count = 2
+        framework.architecture_type = "HIERARCHICAL"
+        framework.project_folder = temp_dir
+        framework.db_path = os.path.join(temp_dir, "test.db")
+        return framework
     
     def test_enhanced_framework_initialization(self, enhanced_framework):
         """Test enhanced framework initialization"""

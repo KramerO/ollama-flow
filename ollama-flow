@@ -87,7 +87,9 @@ For detailed help on any command: ollama-flow <command> --help
 
 def run_enhanced_main(args):
     """Run the enhanced main framework"""
-    cmd = [sys.executable, str(SCRIPT_DIR / "enhanced_main.py")]
+    # Always use absolute path to enhanced_main.py
+    enhanced_main_path = Path(__file__).parent.absolute() / "enhanced_main.py"
+    cmd = [sys.executable, str(enhanced_main_path)]
     
     # Add arguments
     if args.task:
@@ -100,8 +102,15 @@ def run_enhanced_main(args):
         cmd.extend(["--model", args.model])
     if args.secure:
         cmd.append("--secure")
+    
+    # Use current working directory if no project folder specified
     if args.project_folder:
         cmd.extend(["--project-folder", args.project_folder])
+    else:
+        current_dir = os.getcwd()
+        cmd.extend(["--project-folder", current_dir])
+        print(f"🔍 Using current directory: {current_dir}")
+    
     if args.interactive:
         cmd.append("--interactive")
     if args.metrics:

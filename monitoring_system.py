@@ -788,6 +788,40 @@ class MonitoringSystem:
                 pass
         
         logger.info("Monitoring system stopped")
+
+    def start_monitoring_sync(self):
+        """Start monitoring (synchronous wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If loop is already running, create a task
+                task = loop.create_task(self.start_monitoring())
+                print("📊 Monitoring started as background task")
+                return task
+            else:
+                # If no loop is running, run it
+                return loop.run_until_complete(self.start_monitoring())
+        except RuntimeError:
+            # No event loop, create new one
+            print("📊 Starting monitoring system...")
+            return asyncio.run(self.start_monitoring())
+
+    def stop_monitoring_sync(self):
+        """Stop monitoring (synchronous wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If loop is already running, create a task
+                task = loop.create_task(self.stop_monitoring())
+                print("📊 Monitoring stop requested as background task")
+                return task
+            else:
+                # If no loop is running, run it
+                return loop.run_until_complete(self.stop_monitoring())
+        except RuntimeError:
+            # No event loop, create new one
+            print("📊 Stopping monitoring system...")
+            return asyncio.run(self.stop_monitoring())
     
     async def _monitoring_loop(self):
         """Main monitoring loop"""

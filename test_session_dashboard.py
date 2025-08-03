@@ -25,10 +25,10 @@ def test_dashboard_session_api():
             print(f"   Version: {health_data.get('version', 'unknown')}")
         else:
             print("❌ Health check failed")
-            return False
+            assert False, "Health check failed"
     except requests.exceptions.RequestException as e:
         print(f"❌ Dashboard not accessible: {e}")
-        return False
+        assert False, f"Dashboard not accessible: {e}"
     
     # Test getting sessions (should be empty initially)
     try:
@@ -40,10 +40,10 @@ def test_dashboard_session_api():
             print(f"   Session history: {len(sessions_data.get('session_history', []))}")
         else:
             print("❌ Sessions API failed")
-            return False
+            assert False, "Sessions API failed"
     except requests.exceptions.RequestException as e:
         print(f"❌ Sessions API error: {e}")
-        return False
+        assert False, f"Sessions API error: {e}"
     
     # Test creating a new session
     test_session = {
@@ -85,10 +85,10 @@ def test_dashboard_session_api():
                         print(f"   Architecture: {session.get('architecture')}")
                     else:
                         print("❌ Session details failed")
-                        return False
+                        assert False, "Session details failed"
                 else:
                     print("❌ Session details request failed")
-                    return False
+                    assert False, "Session details request failed"
                 
                 # Wait for session to complete (it should complete quickly in mock mode)
                 time.sleep(3)
@@ -108,17 +108,17 @@ def test_dashboard_session_api():
                         print(f"   Last session status: {last_session.get('status')}")
                         print(f"   Last session duration: {last_session.get('duration', 'unknown')}")
                 
-                return True
+                # Test completed successfully
             else:
                 print(f"❌ Session creation failed: {create_data.get('error')}")
-                return False
+                assert False, f"Session creation failed: {create_data.get('error')}"
         else:
             print(f"❌ Session creation request failed: {response.status_code}")
-            return False
+            assert False, f"Session creation request failed: {response.status_code}"
             
     except requests.exceptions.RequestException as e:
         print(f"❌ Session creation error: {e}")
-        return False
+        assert False, f"Session creation error: {e}"
 
 def start_dashboard_for_test():
     """Start dashboard in a separate thread for testing"""
