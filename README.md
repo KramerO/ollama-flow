@@ -54,7 +54,7 @@ Follow these steps to set up Ollama Flow:
 
 ## Usage
 
-To run Ollama Flow, you need to start both the Node.js server and the Python dashboard.
+To run Ollama Flow, you need to start both the Node.js server and potentially interact with the Python applications.
 
 1.  **Start the Ollama Flow Server (Node.js):**
 
@@ -64,33 +64,87 @@ To run Ollama Flow, you need to start both the Node.js server and the Python das
     ```
     This server will listen on `http://localhost:3000`.
 
-2.  **Start the Ollama Flow Dashboard (Python):**
+2.  **Run the Ollama Flow Python CLI Application (`ollama-flow-python/main.py`):**
 
-    Open a **separate** terminal or command prompt, navigate to the project root directory, and run:
+    This application allows you to interact with the Ollama Flow framework directly from the command line, providing tasks and configuration.
+
+    Navigate to the `ollama-flow-python` directory:
     ```bash
-    cd dashboard
-    # Activate the virtual environment
+    cd ollama-flow-python
+    ```
+    Activate the virtual environment (if you created one during installation):
+    ```bash
     # For Windows:
     .\venv\Scripts\activate
     # For Linux/macOS:
     source venv/bin/activate
+    ```
 
-    # Run the Flask application
-    python app.py
+    You can run `main.py` in a few ways:
 
-    # Deactivate the virtual environment when done (optional)
+    *   **Interactive Wizard (no arguments):**
+        If you run `main.py` without any arguments, it will prompt you for the task and project folder.
+        ```bash
+        python main.py
+        ```
+        Follow the on-screen prompts.
+
+    *   **Using Command-Line Arguments:**
+        Provide the task and project folder directly as arguments.
+        ```bash
+        python main.py --task "Please write a simple Python Flask app that says 'Hello, World!' and save it to app.py." --project-folder "/tmp/my_project" --worker-count 2 --architecture-type CENTRALIZED --ollama-model llama3
+        ```
+        Replace the example task, project folder, worker count, architecture type, and Ollama model with your desired values.
+
+    *   **Using a `.env` file:**
+        For persistent configuration, you can create a `.env` file in the `ollama-flow-python` directory with the following variables:
+        ```
+        OLLAMA_PROJECT_FOLDER=/path/to/your/project
+        OLLAMA_WORKER_COUNT=4
+        OLLAMA_ARCHITECTURE_TYPE=HIERARCHICAL
+        OLLAMA_MODEL=llama3
+        ```
+        When `main.py` is run, it will read these values. Command-line arguments will override `.env` values.
+
+    Deactivate the virtual environment when done (optional):
+    ```bash
     deactivate
+    ```
+
+3.  **Start the Ollama Flow Dashboard (Python Flask - `dashboard/app.py`):**
+
+    This is a separate web-based interface for configuring the system and sending prompts.
+
+    Open a **separate** terminal or command prompt, navigate to the `dashboard` directory:
+    ```bash
+    cd dashboard
+    ```
+    Activate the virtual environment:
+    ```bash
+    # For Windows:
+    .\venv\Scripts\activate
+    # For Linux/macOS:
+    source venv/bin/activate
+    ```
+
+    Run the Flask application:
+    ```bash
+    python app.py
     ```
     The dashboard will be accessible in your web browser at `http://localhost:5000`.
 
-3.  **Configure and Interact via the Dashboard:**
-
+    **Configure and Interact via the Dashboard:**
     -   Open your web browser and go to `http://localhost:5000`.
     -   You will find options to select the **Agent Architecture** (Hierarchical, Centralized, Fully Connected) and set the **Number of Worker Agents**.
     -   Apply your desired configuration.
     -   Enter your prompt in the provided text area and click "Run Ollama Flow" to send it to the configured multi-agent system.
 
     *Note: The number of worker agents can also be set via the `OLLAMA_WORKER_COUNT` environment variable before starting the Node.js server. The dashboard configuration will override this for subsequent changes.*
+
+    Deactivate the virtual environment when done (optional):
+    ```bash
+    deactivate
+    ```
 
 ## Running Tests
 

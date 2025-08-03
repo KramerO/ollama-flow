@@ -1,0 +1,12 @@
+ollama
+python-dotenv
+psutil
+scikit-learn
+numpy
+flask
+flask-socketio
+requests
+aiohttp
+click
+rich
+typer
