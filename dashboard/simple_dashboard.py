@@ -66,22 +66,9 @@ class SimpleDashboard:
         if HAS_SOCKETIO:
             self._setup_socketio_events()
     
-    def _setup_routes(self):
-        """Setup Flask routes"""
-        
-        @self.app.route('/')
-        def index():
-            """Main dashboard page"""
-            return self._render_page("System Dashboard", self._get_dashboard_content())
-        
-        @self.app.route('/sessions')
-        def sessions():
-            """Sessions management page"""
-            return self._render_page("Session Management", self._get_sessions_content())
-        
-        def _render_page(self, title, content):
-            """Render a page with common layout"""
-            return f"""
+    def _render_page(self, title, content):
+        """Render a page with common layout"""
+        return f"""
             <!DOCTYPE html>
             <html>
             <head>
@@ -180,8 +167,157 @@ class SimpleDashboard:
             </body>
             </html>
             """
+    
+    def _setup_routes(self):
+        """Setup Flask routes"""
         
-        def _get_dashboard_content(self):
+        @self.app.route('/')
+        def index():
+            """Main dashboard page"""
+            return self._render_page("System Dashboard", self._get_dashboard_content())
+        
+        @self.app.route('/sessions')
+        def sessions():
+            """Sessions management page"""
+            return self._render_page("Session Management", self._get_sessions_content())
+        
+        @self.app.route('/api/status')
+        def api_status():
+            """Get system status"""
+            try:
+                status = {
+                    'system': {
+                        'running': self.is_running,
+                        'current_task': self.current_task,
+                        'timestamp': datetime.now().isoformat()
+                    },
+                    'resources': {
+                        'cpu_percent': psutil.cpu_percent(interval=0.1),
+                        'memory_percent': psutil.virtual_memory().percent,
+                        'disk_percent': psutil.disk_usage('/').percent,
+                        'processes': len(psutil.pids())
+                    }
+                }
+                
+                return jsonify(status)
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/health')
+        def api_health():
+            """Health check endpoint"""
+            return jsonify({
+                'status': 'healthy',
+                'timestamp': datetime.now().isoformat(),
+                'version': '2.0.0'
+            })
+        
+        @self.app.route('/api/sessions', methods=['GET', 'POST'])
+        def api_sessions():
+            """Manage sessions"""
+            if request.method == 'GET':
+                return jsonify({
+                    'success': True,
+                    'active_sessions': self.active_sessions,
+                    'session_history': self.session_history
+                })
+            
+            elif request.method == 'POST':
+                try:
+                    data = request.get_json()
+                    session_id = f"session_{int(time.time())}"
+                    
+                    # Create new session
+                    session = {
+                        'id': session_id,
+                        'name': data.get('name', 'Untitled Session'),
+                        'task': data.get('task', ''),
+                        'workers': data.get('workers', 4),
+                        'architecture': data.get('architecture', 'HIERARCHICAL'),
+                        'model': data.get('model', 'codellama:7b'),
+                        'project_folder': data.get('project_folder', None),
+                        'status': 'running',
+                        'started_at': datetime.now().isoformat(),
+                        'created_by': 'dashboard'
+                    }
+                    
+                    # Add to active sessions
+                    self.active_sessions[session_id] = session
+                    
+                    # Start session (mock implementation - would integrate with actual framework)
+                    self._start_session_background(session)
+                    
+                    return jsonify({
+                        'success': True,
+                        'session_id': session_id,
+                        'message': 'Session created and started successfully'
+                    })
+                    
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': str(e)
+                    }), 400
+        
+        @self.app.route('/api/sessions/<session_id>')
+        def api_session_details(session_id):
+            """Get session details"""
+            if session_id in self.active_sessions:
+                return jsonify({
+                    'success': True,
+                    'session': self.active_sessions[session_id]
+                })
+            else:
+                # Look in history
+                for session in self.session_history:
+                    if session.get('id') == session_id:
+                        return jsonify({
+                            'success': True,
+                            'session': session
+                        })
+                
+                return jsonify({
+                    'success': False,
+                    'error': 'Session not found'
+                }), 404
+        
+        @self.app.route('/api/sessions/<session_id>/stop', methods=['POST'])
+        def api_stop_session(session_id):
+            """Stop a running session"""
+            if session_id in self.active_sessions:
+                try:
+                    session = self.active_sessions[session_id]
+                    session['status'] = 'stopped'
+                    session['stopped_at'] = datetime.now().isoformat()
+                    
+                    # Calculate duration
+                    if 'started_at' in session:
+                        start_time = datetime.fromisoformat(session['started_at'])
+                        duration = datetime.now() - start_time
+                        session['duration'] = f"{duration.seconds // 60}m {duration.seconds % 60}s"
+                    
+                    # Move to history
+                    self.session_history.append(session.copy())
+                    del self.active_sessions[session_id]
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Session stopped successfully'
+                    })
+                    
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': str(e)
+                    }), 500
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Session not found or already stopped'
+                }), 404
+        
+    def _get_dashboard_content(self):
             """Get dashboard content"""
             return """
                     <div class="card">
@@ -427,142 +563,6 @@ class SimpleDashboard:
                         }}, 10000);
                     </script>
             """
-        
-        @self.app.route('/api/status')
-        def api_status():
-            """Get system status"""
-            try:
-                status = {
-                    'system': {
-                        'running': self.is_running,
-                        'current_task': self.current_task,
-                        'timestamp': datetime.now().isoformat()
-                    },
-                    'resources': {
-                        'cpu_percent': psutil.cpu_percent(interval=0.1),
-                        'memory_percent': psutil.virtual_memory().percent,
-                        'disk_percent': psutil.disk_usage('/').percent,
-                        'processes': len(psutil.pids())
-                    }
-                }
-                
-                return jsonify(status)
-                
-            except Exception as e:
-                return jsonify({'error': str(e)}), 500
-        
-        @self.app.route('/api/health')
-        def api_health():
-            """Health check endpoint"""
-            return jsonify({
-                'status': 'healthy',
-                'timestamp': datetime.now().isoformat(),
-                'version': '2.0.0'
-            })
-        
-        @self.app.route('/api/sessions', methods=['GET', 'POST'])
-        def api_sessions():
-            """Manage sessions"""
-            if request.method == 'GET':
-                return jsonify({
-                    'success': True,
-                    'active_sessions': self.active_sessions,
-                    'session_history': self.session_history
-                })
-            
-            elif request.method == 'POST':
-                try:
-                    data = request.get_json()
-                    session_id = f"session_{int(time.time())}"
-                    
-                    # Create new session
-                    session = {
-                        'id': session_id,
-                        'name': data.get('name', 'Untitled Session'),
-                        'task': data.get('task', ''),
-                        'workers': data.get('workers', 4),
-                        'architecture': data.get('architecture', 'HIERARCHICAL'),
-                        'model': data.get('model', 'codellama:7b'),
-                        'project_folder': data.get('project_folder', None),
-                        'status': 'running',
-                        'started_at': datetime.now().isoformat(),
-                        'created_by': 'dashboard'
-                    }
-                    
-                    # Add to active sessions
-                    self.active_sessions[session_id] = session
-                    
-                    # Start session (mock implementation - would integrate with actual framework)
-                    self._start_session_background(session)
-                    
-                    return jsonify({
-                        'success': True,
-                        'session_id': session_id,
-                        'message': 'Session created and started successfully'
-                    })
-                    
-                except Exception as e:
-                    return jsonify({
-                        'success': False,
-                        'error': str(e)
-                    }), 400
-        
-        @self.app.route('/api/sessions/<session_id>')
-        def api_session_details(session_id):
-            """Get session details"""
-            if session_id in self.active_sessions:
-                return jsonify({
-                    'success': True,
-                    'session': self.active_sessions[session_id]
-                })
-            else:
-                # Look in history
-                for session in self.session_history:
-                    if session.get('id') == session_id:
-                        return jsonify({
-                            'success': True,
-                            'session': session
-                        })
-                
-                return jsonify({
-                    'success': False,
-                    'error': 'Session not found'
-                }), 404
-        
-        @self.app.route('/api/sessions/<session_id>/stop', methods=['POST'])
-        def api_stop_session(session_id):
-            """Stop a running session"""
-            if session_id in self.active_sessions:
-                try:
-                    session = self.active_sessions[session_id]
-                    session['status'] = 'stopped'
-                    session['stopped_at'] = datetime.now().isoformat()
-                    
-                    # Calculate duration
-                    if 'started_at' in session:
-                        start_time = datetime.fromisoformat(session['started_at'])
-                        duration = datetime.now() - start_time
-                        session['duration'] = f"{duration.seconds // 60}m {duration.seconds % 60}s"
-                    
-                    # Move to history
-                    self.session_history.append(session.copy())
-                    del self.active_sessions[session_id]
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': 'Session stopped successfully'
-                    })
-                    
-                except Exception as e:
-                    return jsonify({
-                        'success': False,
-                        'error': str(e)
-                    }), 500
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Session not found or already stopped'
-                }), 404
     
     def _setup_socketio_events(self):
         """Setup SocketIO events for real-time updates"""
