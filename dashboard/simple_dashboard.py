@@ -351,14 +351,14 @@ class SimpleDashboard:
                         }
                     </script>
             """
-        
-        def _get_sessions_content(self):
-            """Get sessions management content"""
-            active_sessions_html = ""
-            if self.active_sessions:
-                for session_id, session in self.active_sessions.items():
-                    status_class = "running" if session.get('status') == 'running' else "stopped"
-                    active_sessions_html += f"""
+    
+    def _get_sessions_content(self):
+        """Get sessions management content"""
+        active_sessions_html = ""
+        if self.active_sessions:
+            for session_id, session in self.active_sessions.items():
+                status_class = "running" if session.get('status') == 'running' else "stopped"
+                active_sessions_html += f"""
                         <div class="session-item {status_class}">
                             <div class="session-header">
                                 <h4>{session.get('name', session_id)}</h4>
@@ -378,13 +378,13 @@ class SimpleDashboard:
                             </div>
                         </div>
                     """
-            else:
-                active_sessions_html = "<p>No active sessions</p>"
-            
-            history_html = ""
-            if self.session_history:
-                for session in self.session_history[-5:]:  # Show last 5
-                    history_html += f"""
+        else:
+            active_sessions_html = "<p>No active sessions</p>"
+        
+        history_html = ""
+        if self.session_history:
+            for session in self.session_history[-5:]:  # Show last 5
+                history_html += f"""
                         <div class="session-item stopped">
                             <div class="session-header">
                                 <h4>{session.get('name', session.get('id', 'Unknown'))}</h4>
@@ -397,10 +397,10 @@ class SimpleDashboard:
                             </div>
                         </div>
                     """
-            else:
-                history_html = "<p>No session history</p>"
-            
-            return f"""
+        else:
+            history_html = "<p>No session history</p>"
+        
+        return f"""
                     <div class="two-column">
                         <div>
                             <div class="card">
