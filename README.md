@@ -1,188 +1,102 @@
-# Ollama Flow
+# Ollama Flow - Python Multi-AI Agent Framework
 
-Ollama Flow is a multi-agent system designed to orchestrate interactions with Ollama models through various communication architectures. It features a Node.js backend for agent management and a Python Flask dashboard for user interaction and configuration.
+This project implements a flexible and extensible multi-AI agent framework in Python 3, designed to orchestrate various AI agents for complex task execution. It leverages Ollama for large language model (LLM) interactions and provides agents with controlled access to the command line for dynamic operations.
 
 ## Features
 
--   **Ollama Integration:** Seamlessly interacts with local Ollama models.
--   **Multi-Agent System:** Supports multiple AI agents working together.
--   **Configurable Architectures:** Choose from different communication patterns:
-    -   **Fully Connected:** Every agent can communicate with any other agent (via the orchestrator).
-    -   **Centralized:** All communication flows through a central Queen Agent.
-    -   **Hierarchical:** Groups of agents communicate via Sub-Queen Agents, with overall coordination by a Main Queen Agent.
--   **Configurable Worker Agents:** Dynamically set the number of Ollama Worker Agents.
--   **Web-based Dashboard:** A user-friendly interface to configure the system and send prompts.
-
-## Prerequisites
-
-Before you begin, ensure you have the following installed on your system:
-
--   **Node.js** (LTS version recommended) and **npm**
--   **Python 3** and **pip**
--   **Ollama:** Make sure Ollama is installed and running in the background. You can download it from [ollama.ai](https://ollama.ai/).
-
-## Installation
-
-Follow these steps to set up Ollama Flow:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd ollama-flow
-    ```
-
-2.  **Run the installation script:**
-
-    -   **For Windows:**
-        ```cmd
-        .\install.bat
-        ```
-
-    -   **For Linux/macOS:**
-        ```bash
-        ./install.sh
-        ```
-
-    The script will:
-    -   Check for Node.js, npm, Python, and pip.
-    -   Install Node.js dependencies.
-    -   Build the TypeScript project.
-    -   Set up a Python virtual environment for the dashboard.
-    -   Install Python dependencies.
-
-    *If Node.js or Python are not found, the script will provide instructions for manual installation.*
-
-## Usage
-
-To run Ollama Flow, you need to start both the Node.js server and potentially interact with the Python applications.
-
-1.  **Start the Ollama Flow Server (Node.js):**
-
-    Open your terminal or command prompt, navigate to the project root directory, and run:
-    ```bash
-    npm run start:server
-    ```
-    This server will listen on `http://localhost:3000`.
-
-2.  **Run the Ollama Flow Python CLI Application (`ollama-flow-python/main.py`):**
-
-    This application allows you to interact with the Ollama Flow framework directly from the command line, providing tasks and configuration.
-
-    Navigate to the `ollama-flow-python` directory:
-    ```bash
-    cd ollama-flow-python
-    ```
-    Activate the virtual environment (if you created one during installation):
-    ```bash
-    # For Windows:
-    .\venv\Scripts\activate
-    # For Linux/macOS:
-    source venv/bin/activate
-    ```
-
-    You can run `main.py` in a few ways:
-
-    *   **Interactive Wizard (no arguments):**
-        If you run `main.py` without any arguments, it will prompt you for the task and project folder.
-        ```bash
-        python main.py
-        ```
-        Follow the on-screen prompts.
-
-    *   **Using Command-Line Arguments:**
-        Provide the task and project folder directly as arguments.
-        ```bash
-        python main.py --task "Please write a simple Python Flask app that says 'Hello, World!' and save it to app.py." --project-folder "/tmp/my_project" --worker-count 2 --architecture-type CENTRALIZED --ollama-model llama3
-        ```
-        Replace the example task, project folder, worker count, architecture type, and Ollama model with your desired values.
-
-    *   **Using a `.env` file:**
-        For persistent configuration, you can create a `.env` file in the `ollama-flow-python` directory with the following variables:
-        ```
-        OLLAMA_PROJECT_FOLDER=/path/to/your/project
-        OLLAMA_WORKER_COUNT=4
-        OLLAMA_ARCHITECTURE_TYPE=HIERARCHICAL
-        OLLAMA_MODEL=llama3
-        ```
-        When `main.py` is run, it will read these values. Command-line arguments will override `.env` values.
-
-    Deactivate the virtual environment when done (optional):
-    ```bash
-    deactivate
-    ```
-
-3.  **Start the Ollama Flow Dashboard (Python Flask - `dashboard/app.py`):**
-
-    This is a separate web-based interface for configuring the system and sending prompts.
-
-    Open a **separate** terminal or command prompt, navigate to the `dashboard` directory:
-    ```bash
-    cd dashboard
-    ```
-    Activate the virtual environment:
-    ```bash
-    # For Windows:
-    .\venv\Scripts\activate
-    # For Linux/macOS:
-    source venv/bin/activate
-    ```
-
-    Run the Flask application:
-    ```bash
-    python app.py
-    ```
-    The dashboard will be accessible in your web browser at `http://localhost:5000`.
-
-    **Configure and Interact via the Dashboard:**
-    -   Open your web browser and go to `http://localhost:5000`.
-    -   You will find options to select the **Agent Architecture** (Hierarchical, Centralized, Fully Connected) and set the **Number of Worker Agents**.
-    -   Apply your desired configuration.
-    -   Enter your prompt in the provided text area and click "Run Ollama Flow" to send it to the configured multi-agent system.
-
-    *Note: The number of worker agents can also be set via the `OLLAMA_WORKER_COUNT` environment variable before starting the Node.js server. The dashboard configuration will override this for subsequent changes.*
-
-    Deactivate the virtual environment when done (optional):
-    ```bash
-    deactivate
-    ```
-
-## Running Tests
-
-To run all unit tests for both the TypeScript backend and the Python dashboard:
-
-```bash
-npm test
-```
-
-This command will execute Jest tests for the Node.js part and Pytest tests for the Flask dashboard.
+-   **Modular Agent Architecture**: Easily define and integrate different types of AI agents (Queen, Sub-Queen, Worker).
+-   **Hierarchical Task Decomposition**: Queen and Sub-Queen agents can decompose complex tasks into smaller, manageable subtasks using LLMs.
+-   **Ollama LLM Integration**: Seamless interaction with Ollama-hosted language models for natural language understanding and generation.
+-   **Command-Line Access for Agents**: Worker agents can execute shell commands, enabling dynamic interaction with the host system.
+-   **File Management**: Agents can save generated content (e.g., code) to specified project folders.
+-   **Asynchronous Operations**: Built with `asyncio` for efficient handling of concurrent tasks.
+-   **Environment Variable Management**: Uses `python-dotenv` for easy configuration.
 
 ## Project Structure
 
 ```
-ollama-flow/
-├───.git/
-├───dashboard/              # Python Flask dashboard application
-│   ├───app.py
-│   ├───templates/
-│   │   └───index.html
-│   ├───venv/               # Python Virtual Environment
-│   └───test_app.py         # Python unit tests
-├───dist/                   # Compiled TypeScript output
-├───node_modules/           # Node.js dependencies
-├───src/                    # TypeScript source code
-│   ├───agent.ts            # Base Agent and Message definitions
-│   ├───orchestrator.ts     # Manages agents and message dispatching
-│   ├───server.ts           # Node.js Express server
-│   ├───worker.ts           # OllamaAgent (renamed from worker.ts)
-│   ├───queenAgent.ts       # Main Queen Agent logic
-│   ├───subQueenAgent.ts    # Sub-Queen Agent logic for hierarchical architecture
-│   └───__tests__/          # TypeScript unit tests
-│       └───orchestrator.test.ts
-├───.gitignore
-├───package.json
-├───package-lock.json
-├───tsconfig.json
-├───jest.config.cjs         # Jest configuration for TypeScript tests
-├───install.bat             # Windows installation script
-└───install.sh              # Linux/macOS installation script
+ollama-flow-python/
+├── agents/
+│   ├── base_agent.py
+│   ├── queen_agent.py
+│   ├── sub_queen_agent.py
+│   └── worker_agent.py
+├── orchestrator/
+│   └── orchestrator.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_base_agent.py
+│   ├── test_orchestrator.py
+│   ├── test_queen_agent.py
+│   ├── test_sub_queen_agent.py
+│   └── test_worker_agent.py
+├── .env.example
+├── main.py
+├── requirements.txt
+└── README.md
+└── .gitignore
 ```
+
+## Setup and Installation
+
+1.  **Clone the repository (if you haven't already):**
+
+    ```bash
+    git clone <repository_url>
+    cd ollama-flow
+    git checkout python # Switch to the python branch
+    cd ollama-flow-python
+    ```
+
+2.  **Create a Python Virtual Environment (recommended):**
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+    ```
+
+3.  **Install Dependencies:**
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configure Environment Variables:**
+
+    Create a `.env` file in the `ollama-flow-python/` directory based on `.env.example`:
+
+    ```ini
+    # .env
+    OLLAMA_WORKER_COUNT=4
+    OLLAMA_ARCHITECTURE_TYPE=HIERARCHICAL # or CENTRALIZED, FULLY_CONNECTED
+    OLLAMA_MODEL=llama3 # or any other Ollama model you have downloaded
+    OLLAMA_PROJECT_FOLDER=/path/to/your/agent/working/directory # Optional: where agents can save files
+    ```
+
+    **Note**: Ensure you have Ollama installed and the specified `OLLAMA_MODEL` downloaded and running.
+
+## Running the Framework
+
+To start the multi-AI agent framework, execute `main.py`:
+
+```bash
+python main.py
+```
+
+The `main.py` script contains an example prompt. You can modify this prompt to test different functionalities, such as file saving or command execution.
+
+## Testing
+
+Unit tests are provided to ensure the functionality of individual components. To run the tests:
+
+1.  **Ensure you are in the `ollama-flow-python` directory and your virtual environment is active.**
+
+2.  **Run pytest:**
+
+    ```bash
+    pytest
+    ```
+
+## Security Disclaimer
+
+**WARNING**: This framework provides AI agents with access to the command line. In a real-world or production environment, this poses significant security risks. Malicious or unintended commands executed by an AI agent could lead to data loss, system compromise, or other severe issues. For any deployment beyond development and testing, robust security measures such as sandboxing, strict command whitelisting, and resource limitations are absolutely essential. Use with extreme caution and only in isolated, controlled environments.

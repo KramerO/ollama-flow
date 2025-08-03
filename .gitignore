@@ -1,5 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.dist-info/
+*.egg-info/
 
-node_modules/
-dist/
-dashboard/venv/
+# Environments
 .env
+venv/
+env/
+
+# Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+thumbs.db
+
+# Python test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Ollama Flow specific
+*.ollama_cache
+*.db
+*.log
+.swarm/
+.claude-flow/metrics/
+
+# Temporary and cache files
+*.tmp
+*_temp.py
+temp_*
