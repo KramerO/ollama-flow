@@ -86,6 +86,12 @@ Examples:
             help="Launch web dashboard interface"
         )
         
+        parser.add_argument(
+            "--cli-dashboard",
+            action="store_true",
+            help="Launch enhanced CLI dashboard with real-time monitoring"
+        )
+        
         # Agent configuration
         parser.add_argument(
             "--workers", "--worker-count",
@@ -202,6 +208,7 @@ Examples:
             'interactive': args.interactive,
             'task': args.task,
             'web_dashboard': args.web_dashboard,
+            'cli_dashboard': args.cli_dashboard,
             
             # Control commands
             'stop_agents': args.stop_agents,
@@ -830,6 +837,50 @@ Examples:
             print("\n💡 Try using interactive mode instead:")
             print("  ollama-flow --interactive")
 
+    async def run_cli_dashboard(self):
+        """Run stable CLI dashboard (optimized version)"""
+        try:
+            print("\n" + "="*60)
+            print("📊 OLLAMA FLOW - Stable CLI Dashboard")
+            print("="*60)
+            print("🚀 Starting stable CLI dashboard...")
+            print("📋 Features: Real-time monitoring, System resources, Task tracking")
+            print("⌨️  Controls: [1-6] Switch panels | [Q] Quit | [R] Refresh")
+            print("⚡ Optimized: Reduced flickering, better error handling")
+            print("="*60)
+            print("\n💡 Press any key to continue or Ctrl+C to cancel...")
+            
+            # Import stable CLI dashboard
+            try:
+                from cli_dashboard_stable import StableCLIDashboard
+                
+                # Create and initialize stable dashboard
+                dashboard = StableCLIDashboard(db_path=self.config.get('db_path', 'ollama_flow_messages.db'))
+                await dashboard.initialize()
+                
+                print("✅ Stable CLI Dashboard initialized successfully")
+                print("🎯 Launching optimized dashboard interface...")
+                
+                # Run stable dashboard
+                dashboard.run()
+                
+            except ImportError as e:
+                print(f"❌ Could not import stable CLI dashboard: {e}")
+                print("\n💡 Make sure the cli_dashboard_stable.py file exists")
+                print("  and all dependencies are installed:")
+                print("  • curses (built-in)")
+                print("  • psutil")
+                
+            except Exception as e:
+                print(f"❌ CLI Dashboard error: {e}")
+                logger.error(f"CLI Dashboard failed: {e}")
+                
+        except Exception as e:
+            logger.error(f"CLI dashboard startup failed: {e}")
+            print(f"\n❌ Dashboard Error: {e}")
+            print("\n💡 Try using web dashboard instead:")
+            print("  ollama-flow --web-dashboard")
+
     async def main(self):
         """Main execution flow"""
         try:
@@ -866,6 +917,8 @@ Examples:
             
             if self.config['web_dashboard']:
                 await self.run_web_dashboard()
+            elif self.config['cli_dashboard']:
+                await self.run_cli_dashboard()
             elif self.config['interactive']:
                 await self.run_interactive_mode()
             else:
