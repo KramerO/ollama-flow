@@ -79,7 +79,7 @@
 
 ## 🚀 **Schnellstart**
 
-### **Ein-Befehl-Installation**
+### **Ein-Befehl-Installation (Linux/macOS)**
 ```bash
 # Repository klonen und installieren
 git clone https://github.com/your-username/ollama-flow.git
@@ -138,7 +138,7 @@ db.cleanup_old_messages(max_age_hours=1)  # Automatische Bereinigung
 
 ### **2. Enhanced JSON Parser** (`enhanced_json_parser.py`)  
 - **Multi-Strategy Parsing:** 4 Fallback-Ebenen für maximale Kompatibilität
-- **Windows-Pfad-Unterstützung:** Behandelt Backslashes und Escape-Sequenzen
+- **Pfad-Unterstützung:** Behandelt verschiedene Pfad-Formate und Escape-Sequenzen
 - **Control-Character-Handling:** Bereinigt problematische Zeichen automatisch
 - **Success Rate:** 95%+ vs. 60% Standard
 
@@ -290,6 +290,13 @@ python3 enhanced_framework.py run \
 
 ## ⚙️ **Konfiguration**
 
+### **Systemvoraussetzungen:**
+- **Python:** 3.10+ (empfohlen: 3.12)
+- **Ollama:** Neueste Version mit Modellen
+- **RAM:** 8GB minimum, 16GB empfohlen
+- **OS:** Linux oder macOS
+- **Storage:** 5GB für Framework + Modell-Speicher
+
 ### **Architektur-Auswahl:**
 ```bash
 # Hierarchical (Standard) - Beste Balance für komplexe Projekte  
@@ -375,7 +382,7 @@ python3 test_ascii_architecture.py
 
 #### **3. Code-Generierungsfehler:**
 ```bash
-# Problem: cv20.GaussianBlur() typos
+# Problem: cv20.GaussianBlur() typos, Mixed Bash/Python
 # Lösung: Automatische Code-Korrektur
 ✅ Code generator auto-corrected 3 syntax errors
 ```
@@ -514,7 +521,7 @@ MIT License - Kurz gesagt:
 **Bereit, AI-Agenten zu orchestrieren? Starte jetzt mit Ollama Flow!**
 
 ```bash
-# 🎯 Ein Befehl - Vollständiges Setup:
+# 🎯 Ein Befehl - Vollständiges Setup (Linux/macOS):
 git clone https://github.com/your-username/ollama-flow.git && cd ollama-flow && python3 enhanced_framework.py run "Hallo Welt Projekt" --drones 2
 
 # 📊 Dashboard mit ASCII-Architektur starten:
