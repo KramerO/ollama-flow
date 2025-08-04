@@ -8,6 +8,14 @@ from agents.drone_agent import DroneAgent, DroneRole
 from agents.secure_drone_agent import SecureDroneAgent
 from typing import Dict
 
+# Import enhanced JSON parser
+try:
+    from enhanced_json_parser import parse_subtasks
+    ENHANCED_PARSER_AVAILABLE = True
+except ImportError:
+    ENHANCED_PARSER_AVAILABLE = False
+    print("⚠️ Enhanced JSON parser not available, using fallback")
+
 class SubQueenAgent(BaseAgent):
     def __init__(self, agent_id: str, name: str, model: str = "llama3"):
         super().__init__(agent_id, name)
@@ -23,6 +31,7 @@ class SubQueenAgent(BaseAgent):
 
     async def _decompose_task(self, task: str) -> List[str]:
         decomposition_prompt = f"Given the sub-task: '{task}'. Decompose this into a list of smaller, actionable subtasks for specialized drone agents. Consider different roles like analyst, data scientist, IT architect, and developer. Respond only with a JSON array of strings, where each string is a subtask. Example: ['Subtask 1', 'Subtask 2']"
+        
         try:
             response = ollama.chat(
                 model=self.model,
@@ -30,6 +39,20 @@ class SubQueenAgent(BaseAgent):
             )
             raw_response = response["message"]["content"]
             print(f"[SubQueenAgent] Decomposition LLM Raw Response: {raw_response}")
+            
+            # Use enhanced JSON parser if available
+            if ENHANCED_PARSER_AVAILABLE:
+                try:
+                    subtasks = parse_subtasks(raw_response)
+                    if subtasks and len(subtasks) > 0:
+                        print(f"[SubQueenAgent] ✅ Enhanced parser successfully extracted {len(subtasks)} subtasks")
+                        return subtasks
+                    else:
+                        print(f"[SubQueenAgent] ⚠️ Enhanced parser returned empty result, using fallback")
+                except Exception as e:
+                    print(f"[SubQueenAgent] ⚠️ Enhanced parser failed: {e}, using fallback")
+            
+            # Fallback to original parsing method (improved)
             try:
                 # Clean the response - remove markdown code blocks
                 cleaned_response = raw_response.strip()
@@ -55,6 +78,7 @@ class SubQueenAgent(BaseAgent):
                 
                 subtasks = json.loads(cleaned_response)
                 if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
+                    print(f"[SubQueenAgent] ✅ Fallback parser extracted {len(subtasks)} subtasks")
                     return subtasks
                 else:
                     print(f"[SubQueenAgent] LLM response is not a valid JSON array of strings. Falling back to single task.")
@@ -66,6 +90,7 @@ class SubQueenAgent(BaseAgent):
                 print(f"[SubQueenAgent] Cleaned response: {cleaned_response[:500]}...")
                 print(f"[SubQueenAgent] Error location: line {getattr(e, 'lineno', 'unknown')}, column {getattr(e, 'colno', 'unknown')}")
                 return [task]
+                
         except Exception as e:
             print(f"[SubQueenAgent] Error during task decomposition: {e}. Falling back to single task.")
             return [task]

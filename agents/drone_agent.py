@@ -8,6 +8,14 @@ from enum import Enum
 
 from agents.base_agent import BaseAgent, AgentMessage
 
+# Import enhanced code generator
+try:
+    from enhanced_code_generator import create_code_generator
+    ENHANCED_CODEGEN_AVAILABLE = True
+except ImportError:
+    ENHANCED_CODEGEN_AVAILABLE = False
+    print("⚠️ Enhanced code generator not available, using fallback")
+
 class DroneRole(Enum):
     """Different roles a drone can take"""
     ANALYST = "analyst"
@@ -22,6 +30,15 @@ class DroneAgent(BaseAgent):
         self.project_folder_path = project_folder_path
         self.role = role
         self.capabilities = self._get_role_capabilities()
+        
+        # Initialize enhanced code generator if available
+        self.code_generator = None
+        if ENHANCED_CODEGEN_AVAILABLE:
+            try:
+                self.code_generator = create_code_generator()
+                print(f"✅ Enhanced code generator initialized for {self.name}")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize enhanced code generator: {e}")
 
     async def _perform_task(self, prompt: str) -> str:
         try:
@@ -186,19 +203,59 @@ Be practical and use command-line tools effectively. Respond with clear steps an
         # Parse and execute any commands found in the response
         await self._parse_and_execute_commands(result)
         
-        # Extract and save any Python code found in the response
+        # Extract and save any Python code found in the response using enhanced generator
         if "python" in task.lower() or ".py" in task.lower() or "opencv" in task.lower():
-            extracted_code = self._extract_complete_python_code(result)
-            if extracted_code and self.project_folder_path:
-                # Determine filename based on task
-                filename = self._determine_filename(task)
-                file_path = os.path.join(self.project_folder_path, filename)
+            if self.code_generator and self.project_folder_path:
                 try:
-                    with open(file_path, "w", encoding='utf-8') as f:
-                        f.write(extracted_code)
-                    result += f"\n\n✅ Complete Python code saved to: {file_path}"
+                    # Use enhanced code generator
+                    code_result = self.code_generator.extract_and_validate_code(result, task)
+                    
+                    if code_result['code'] and code_result['is_valid']:
+                        file_path = os.path.join(self.project_folder_path, code_result['filename'])
+                        
+                        with open(file_path, "w", encoding='utf-8') as f:
+                            f.write(code_result['code'])
+                        
+                        result += f"\n\n✅ Enhanced code validation passed"
+                        result += f"\n✅ {code_result['language'].upper()} code saved to: {file_path}"
+                        
+                        if code_result['issues']:
+                            result += f"\n⚠️ Code issues detected: {', '.join(code_result['issues'])}"
+                    
+                    elif code_result['code']:
+                        result += f"\n⚠️ Code validation failed: {', '.join(code_result['issues'])}"
+                        result += f"\n💾 Saving code anyway for manual review..."
+                        
+                        file_path = os.path.join(self.project_folder_path, code_result['filename'])
+                        with open(file_path, "w", encoding='utf-8') as f:
+                            f.write(code_result['code'])
+                        result += f"\n📝 Code saved to: {file_path}"
+                    
                 except Exception as e:
-                    result += f"\n❌ Error saving Python code: {e}"
+                    result += f"\n❌ Enhanced code generator failed: {e}"
+                    # Fallback to original method
+                    extracted_code = self._extract_complete_python_code(result)
+                    if extracted_code:
+                        filename = self._determine_filename(task)
+                        file_path = os.path.join(self.project_folder_path, filename)
+                        try:
+                            with open(file_path, "w", encoding='utf-8') as f:
+                                f.write(extracted_code)
+                            result += f"\n✅ Fallback: Python code saved to: {file_path}"
+                        except Exception as e2:
+                            result += f"\n❌ Error saving Python code: {e2}"
+            else:
+                # Original fallback method
+                extracted_code = self._extract_complete_python_code(result)
+                if extracted_code and self.project_folder_path:
+                    filename = self._determine_filename(task)
+                    file_path = os.path.join(self.project_folder_path, filename)
+                    try:
+                        with open(file_path, "w", encoding='utf-8') as f:
+                            f.write(extracted_code)
+                        result += f"\n✅ Complete Python code saved to: {file_path}"
+                    except Exception as e:
+                        result += f"\n❌ Error saving Python code: {e}"
         
         return result
 

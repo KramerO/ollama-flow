@@ -48,7 +48,6 @@ def main():
             import glob
             import re
             from datetime import datetime, timedelta
-            from pathlib import Path
             
             class DroneDashboardHandler(SimpleHTTPRequestHandler):
                 def get_running_tasks(self):

@@ -4,16 +4,34 @@ import asyncio
 import uuid
 import ollama
 import re
-from db_manager import MessageDBManager # Import the new DB Manager
+# Import enhanced DB manager with fallback
+try:
+    from enhanced_db_manager import EnhancedDBManager
+    from db_manager import MessageDBManager
+    ENHANCED_DB_AVAILABLE = True
+except ImportError:
+    from db_manager import MessageDBManager
+    ENHANCED_DB_AVAILABLE = False
+    print("⚠️ Enhanced database manager not available, using standard version")
 
 class Orchestrator:
-    def __init__(self, db_manager: MessageDBManager, model: str = "codellama:7b"):
+    def __init__(self, db_manager=None, model: str = "phi3:mini"):
+        # Use enhanced database manager if available and none provided
+        if db_manager is None:
+            if ENHANCED_DB_AVAILABLE:
+                self.db_manager = EnhancedDBManager()
+                print("✅ Using enhanced database manager")
+            else:
+                self.db_manager = MessageDBManager()
+                print("⚠️ Using standard database manager")
+        else:
+            self.db_manager = db_manager
+            
         self.agents: Dict[str, BaseAgent] = {}
         self.response_resolvers: Dict[str, asyncio.Future] = {}
         self.request_counter = 0
-        self.db_manager = db_manager
-        self.polling_task = None
         self.model = model
+        self.polling_task = None
 
     def start_polling(self):
         if self.polling_task is None:
