@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from orchestrator.orchestrator import Orchestrator
 from agents.queen_agent import QueenAgent
 from agents.sub_queen_agent import SubQueenAgent
-from agents.worker_agent import WorkerAgent
+from agents.drone_agent import DroneAgent, DroneRole
 from db_manager import MessageDBManager # Import the new DB Manager
 
 load_dotenv()
@@ -15,7 +15,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Ollama Flow Framework CLI")
     parser.add_argument("--task", type=str, help="The task prompt for the orchestrator.")
     parser.add_argument("--project-folder", type=str, help="The project folder path.")
-    parser.add_argument("--worker-count", type=int, help="Number of worker agents.")
+    parser.add_argument("--drone-count", type=int, help="Number of drone agents.")
+    parser.add_argument("--worker-count", type=int, help="Number of drone agents (legacy, use --drone-count).")  # Legacy support
     parser.add_argument("--architecture-type", type=str, choices=["HIERARCHICAL", "CENTRALIZED", "FULLY_CONNECTED"], help="Architecture type (HIERARCHICAL, CENTRALIZED, FULLY_CONNECTED).")
     parser.add_argument("--ollama-model", type=str, help="Ollama model to use (e.g., llama3).")
     args = parser.parse_args()
@@ -26,17 +27,19 @@ async def main():
     try:
         orchestrator = Orchestrator(db_manager)
 
-        # Determine worker_count
-        worker_count_from_env = os.getenv("OLLAMA_WORKER_COUNT")
-        if args.worker_count is not None:
+        # Determine drone_count (with legacy worker_count support)
+        drone_count_from_env = os.getenv("OLLAMA_DRONE_COUNT") or os.getenv("OLLAMA_WORKER_COUNT")
+        if args.drone_count is not None:
+            worker_count = args.drone_count
+        elif args.worker_count is not None:  # Legacy support
             worker_count = args.worker_count
-        elif worker_count_from_env is not None:
-            worker_count = int(worker_count_from_env)
+        elif drone_count_from_env is not None:
+            worker_count = int(drone_count_from_env)
         else:
             while True:
                 try:
-                    wc_input = input("Enter number of worker agents (default: 4): ").strip()
-                    worker_count = int(wc_input) if wc_input else 4
+                    dc_input = input("Enter number of drone agents (default: 4): ").strip()
+                    worker_count = int(dc_input) if dc_input else 4
                     break
                 except ValueError:
                     print("Invalid input. Please enter a number.")
@@ -95,10 +98,14 @@ async def main():
 
             worker_agents = []
             for i in range(worker_count):
-                worker = WorkerAgent(f"worker-agent-{i+1}", f"Worker {i+1}", ollama_model, project_folder)
-                worker_agents.append(worker)
-                orchestrator.register_agent(worker)
-                sub_queen_groups[i % sub_queen_count].append(worker) # Distribute workers among sub-queens
+                # Assign roles in round-robin fashion
+                available_roles = list(DroneRole)
+                role = available_roles[i % len(available_roles)]
+                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1} ({role.value})", ollama_model, project_folder, role)
+                worker_agents.append(drone)
+                orchestrator.register_agent(drone)
+                sub_queen_groups[i % sub_queen_count].append(drone) # Distribute drones among sub-queens
+                print(f"Created drone agent {i+1} with role: {role.value}")
 
             sub_queen_agents = []
             for i in range(sub_queen_count):
@@ -110,8 +117,12 @@ async def main():
         elif architecture_type in ["CENTRALIZED", "FULLY_CONNECTED"]:
             # For these architectures, workers are directly managed by the Queen
             for i in range(worker_count):
-                worker = WorkerAgent(f"worker-agent-{i+1}", f"Worker {i+1}", ollama_model, project_folder)
-                orchestrator.register_agent(worker)
+                # Assign roles in round-robin fashion
+                available_roles = list(DroneRole)
+                role = available_roles[i % len(available_roles)]
+                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1} ({role.value})", ollama_model, project_folder, role)
+                orchestrator.register_agent(drone)
+                print(f"Created drone agent {i+1} with role: {role.value}")
 
         # Initialize Queen Agent after all other agents are registered
         queen_agent.initialize_agents()

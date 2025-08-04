@@ -8,8 +8,8 @@ import concurrent.futures
 
 from agents.base_agent import BaseAgent, AgentMessage
 from agents.sub_queen_agent import SubQueenAgent
-from agents.worker_agent import WorkerAgent
-from agents.secure_worker_agent import SecureWorkerAgent
+from agents.drone_agent import DroneAgent, DroneRole
+from agents.secure_drone_agent import SecureDroneAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -58,7 +58,8 @@ class EnhancedQueenAgent(BaseAgent):
         self.architecture_type = architecture_type
         self.model = model
         self.sub_queen_agents: List[BaseAgent] = []
-        self.worker_agents: List[BaseAgent] = []
+        self.drone_agents: List[BaseAgent] = []
+        self.drone_roles: Dict[str, DroneRole] = {}  # agent_id -> role mapping
         
         # Enhanced task management
         self.task_graph: Dict[str, TaskNode] = {}
@@ -80,21 +81,25 @@ class EnhancedQueenAgent(BaseAgent):
                 self.sub_queen_agents = self.orchestrator.get_agents_by_type(SubQueenAgent)
                 logger.info(f"QueenAgent {self.name} found {len(self.sub_queen_agents)} SubQueenAgents.")
             elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
-                # Try SecureWorkerAgent first, fallback to WorkerAgent
-                self.worker_agents = self.orchestrator.get_agents_by_type(SecureWorkerAgent)
-                if not self.worker_agents:
-                    self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
-                logger.info(f"QueenAgent {self.name} found {len(self.worker_agents)} WorkerAgents.")
+                # Try SecureDroneAgent first, fallback to DroneAgent
+                self.drone_agents = self.orchestrator.get_agents_by_type(SecureDroneAgent)
+                if not self.drone_agents:
+                    self.drone_agents = self.orchestrator.get_agents_by_type(DroneAgent)
+                logger.info(f"QueenAgent {self.name} found {len(self.drone_agents)} DroneAgents.")
                 
-                # Initialize worker performance tracking
-                for worker in self.worker_agents:
-                    self.worker_performance[worker.agent_id] = {
+                # Initialize drone performance tracking and roles
+                self._initialize_drone_roles()
+                for drone in self.drone_agents:
+                    role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+                    skills = self._get_role_skills(role)
+                    self.worker_performance[drone.agent_id] = {
                         'completed_tasks': 0,
                         'failed_tasks': 0,
                         'average_duration': 0.0,
-                        'skills': ['general'],  # Default skills
+                        'skills': skills,
                         'current_load': 0,
-                        'reliability_score': 1.0
+                        'reliability_score': 1.0,
+                        'role': role.value
                     }
 
     async def _async_ollama_call(self, prompt: str) -> str:
@@ -442,54 +447,75 @@ class EnhancedQueenAgent(BaseAgent):
                 required_skills=['general']
             )]
 
-    def _get_optimal_worker_assignment(self, task_node: TaskNode) -> Optional[str]:
-        """Intelligently assign tasks to workers based on skills, load, and performance"""
-        if not self.worker_agents:
+    def _get_optimal_drone_assignment(self, task_node: TaskNode) -> Optional[str]:
+        """Intelligently assign tasks to drones based on roles, skills, load, and performance"""
+        if not self.drone_agents:
             return None
             
-        # Initialize worker performance tracking if missing
-        for worker in self.worker_agents:
-            if worker.agent_id not in self.worker_performance:
-                self.worker_performance[worker.agent_id] = {
+        # Initialize drone performance tracking if missing
+        for drone in self.drone_agents:
+            if drone.agent_id not in self.worker_performance:
+                role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+                skills = self._get_role_skills(role)
+                self.worker_performance[drone.agent_id] = {
                     'completed_tasks': 0,
                     'failed_tasks': 0,
                     'average_duration': 0.0,
-                    'skills': ['general'],  # Default skills
+                    'skills': skills,
                     'current_load': 0,
-                    'reliability_score': 1.0
+                    'reliability_score': 1.0,
+                    'role': role.value
                 }
             
-        available_workers = []
-        for worker in self.worker_agents:
-            worker_id = worker.agent_id
-            performance = self.worker_performance[worker_id]
+        # Determine optimal role for this task
+        optimal_role = self._determine_task_role(task_node.content)
+        
+        available_drones = []
+        for drone in self.drone_agents:
+            drone_id = drone.agent_id
+            performance = self.worker_performance[drone_id]
+            drone_role = self.drone_roles.get(drone_id, DroneRole.DEVELOPER)
             
-            # Check if worker has required skills
-            worker_skills = set(performance['skills'])
+            # Role matching bonus
+            role_match = 1.0 if drone_role == optimal_role else 0.5
+            
+            # Check if drone has required skills
+            drone_skills = set(performance['skills'])
             required_skills = set(task_node.required_skills)
             
-            skill_match = len(worker_skills.intersection(required_skills)) / len(required_skills) if required_skills else 1.0
+            skill_match = len(drone_skills.intersection(required_skills)) / len(required_skills) if required_skills else 1.0
             
-            # Calculate worker score
+            # Calculate drone score with role consideration
             score = (
-                performance['reliability_score'] * 0.4 +
-                skill_match * 0.3 +
-                (1.0 - performance['current_load'] / 10.0) * 0.3  # Prefer less loaded workers
+                performance['reliability_score'] * 0.3 +
+                skill_match * 0.25 +
+                role_match * 0.3 +  # Role matching is important
+                (1.0 - performance['current_load'] / 10.0) * 0.15  # Load consideration
             )
             
-            available_workers.append((worker_id, score))
+            available_drones.append((drone_id, score, drone_role))
             
-        if not available_workers:
+        if not available_drones:
             return None
             
-        # Sort by score and return best worker
-        available_workers.sort(key=lambda x: x[1], reverse=True)
-        best_worker_id = available_workers[0][0]
+        # Sort by score and return best drone
+        available_drones.sort(key=lambda x: x[1], reverse=True)
+        best_drone_id = available_drones[0][0]
+        best_role = available_drones[0][2]
         
-        # Update worker load
-        self.worker_performance[best_worker_id]['current_load'] += 1
+        # Update drone role if needed and load
+        if best_role != optimal_role:
+            self.drone_roles[best_drone_id] = optimal_role
+            # Update drone object if it supports role changes
+            for drone in self.drone_agents:
+                if drone.agent_id == best_drone_id and hasattr(drone, 'role'):
+                    drone.role = optimal_role
+                    if hasattr(drone, '_get_role_capabilities'):
+                        drone.capabilities = drone._get_role_capabilities()
         
-        return best_worker_id
+        self.worker_performance[best_drone_id]['current_load'] += 1
+        
+        return best_drone_id
 
     def _get_ready_tasks(self) -> List[TaskNode]:
         """Get tasks that are ready to be executed (dependencies met)"""
@@ -525,49 +551,65 @@ class EnhancedQueenAgent(BaseAgent):
         
         for task_node in ready_tasks:
             if task_node.status == TaskStatus.PENDING:
-                optimal_worker = self._get_optimal_worker_assignment(task_node)
+                optimal_drone = self._get_optimal_drone_assignment(task_node)
                 
-                if optimal_worker:
+                if optimal_drone:
                     task_node.status = TaskStatus.ASSIGNED
-                    task_node.assigned_worker = optimal_worker
+                    task_node.assigned_worker = optimal_drone  # Keep field name for compatibility
                     task_node.started_at = asyncio.get_event_loop().time()
                     
-                    self.active_tasks[task_node.id] = optimal_worker
+                    self.active_tasks[task_node.id] = optimal_drone
                     
                     # Create assignment task
-                    assignment_task = self._assign_task_to_worker(
-                        optimal_worker, task_node, request_id
+                    assignment_task = self._assign_task_to_drone(
+                        optimal_drone, task_node, request_id
                     )
                     assignment_tasks.append(assignment_task)
                     
-                    logger.info(f"Assigned task {task_node.id} to worker {optimal_worker}")
+                    logger.info(f"Assigned task {task_node.id} to drone {optimal_drone} with role {self.drone_roles.get(optimal_drone, 'unknown')}")
         
         # Execute all assignments in parallel
         if assignment_tasks:
             await asyncio.gather(*assignment_tasks, return_exceptions=True)
 
-    async def _assign_task_to_worker(self, worker_id: str, task_node: TaskNode, request_id: str):
-        """Assign a specific task to a worker"""
+    async def _assign_task_to_drone(self, drone_id: str, task_node: TaskNode, request_id: str):
+        """Assign a specific task to a drone with role-based context"""
         try:
+            drone_role = self.drone_roles.get(drone_id, DroneRole.DEVELOPER)
+            role_context = self._get_role_context(drone_role)
+            
             enhanced_task_content = f"""
-            Task ID: {task_node.id}
-            Priority: {task_node.priority.name}
-            Estimated Duration: {task_node.estimated_duration}s
-            Required Skills: {', '.join(task_node.required_skills)}
-            
-            Task: {task_node.content}
-            
-            Additional Context:
-            - Complexity Score: {task_node.metadata.get('complexity_score', 'N/A')}
-            - Parallelizable: {task_node.metadata.get('parallelizable', True)}
-            - Original Task: {task_node.metadata.get('original_task', 'N/A')}
+=== DRONE TASK ASSIGNMENT ===
+Task ID: {task_node.id}
+Drone Role: {drone_role.value.upper()}
+Priority: {task_node.priority.name}
+Estimated Duration: {task_node.estimated_duration}s
+Required Skills: {', '.join(task_node.required_skills)}
+
+=== ROLE CONTEXT ===
+{role_context}
+
+=== TASK DESCRIPTION ===
+{task_node.content}
+
+=== ADDITIONAL CONTEXT ===
+- Complexity Score: {task_node.metadata.get('complexity_score', 'N/A')}
+- Parallelizable: {task_node.metadata.get('parallelizable', True)}
+- Original Task: {task_node.metadata.get('original_task', 'N/A')}
+
+=== EXECUTION GUIDELINES ===
+1. Apply role-specific expertise and methodologies
+2. Consider task dependencies and prerequisites
+3. Follow best practices for your assigned role
+4. Document your approach and results
+5. Report any issues or blockers immediately
             """
             
-            await self.send_message(worker_id, "enhanced-task", enhanced_task_content, request_id)
+            await self.send_message(drone_id, "enhanced-task", enhanced_task_content, request_id)
             task_node.status = TaskStatus.IN_PROGRESS
             
         except Exception as e:
-            logger.error(f"Failed to assign task {task_node.id} to worker {worker_id}: {e}")
+            logger.error(f"Failed to assign task {task_node.id} to drone {drone_id}: {e}")
             task_node.status = TaskStatus.FAILED
             self.failed_tasks.append(task_node.id)
 
@@ -586,19 +628,19 @@ class EnhancedQueenAgent(BaseAgent):
                 if self.architecture_type == 'HIERARCHICAL':
                     # If no sub-queens found, work directly with available workers
                     if len(self.sub_queen_agents) == 0:
-                        logger.warning("No sub-queen agents found, falling back to direct worker mode")
+                        logger.warning("No sub-queen agents found, falling back to direct drone mode")
                         if self.orchestrator:
-                            # Try SecureWorkerAgent first, fallback to WorkerAgent
-                            self.worker_agents = self.orchestrator.get_agents_by_type(SecureWorkerAgent)
-                            if not self.worker_agents:
-                                from agents.worker_agent import WorkerAgent
-                                self.worker_agents = self.orchestrator.get_agents_by_type(WorkerAgent)
-                            logger.info(f"Found {len(self.worker_agents)} workers for direct mode")
-                        worker_count = max(1, len(self.worker_agents))
+                            # Try SecureDroneAgent first, fallback to DroneAgent
+                            self.drone_agents = self.orchestrator.get_agents_by_type(SecureDroneAgent)
+                            if not self.drone_agents:
+                                self.drone_agents = self.orchestrator.get_agents_by_type(DroneAgent)
+                            logger.info(f"Found {len(self.drone_agents)} drones for direct mode")
+                            self._initialize_drone_roles()
+                        worker_count = max(1, len(self.drone_agents))
                     else:
                         worker_count = len(self.sub_queen_agents) * 2
                 elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
-                    worker_count = len(self.worker_agents)
+                    worker_count = len(self.drone_agents)
                 else:
                     worker_count = 1  # Fallback
                 
@@ -613,13 +655,13 @@ class EnhancedQueenAgent(BaseAgent):
                 
                 logger.info(f"Decomposed into {len(task_nodes)} enhanced tasks with dependencies")
                 
-                # Check if we have workers to distribute to
-                if len(self.worker_agents) > 0:
+                # Check if we have drones to distribute to
+                if len(self.drone_agents) > 0:
                     # Optimal task distribution
                     await self._distribute_tasks_optimally(task_nodes, message.request_id)
                 else:
-                    # No workers available - execute task directly
-                    logger.warning("No workers available, QueenAgent executing task directly")
+                    # No drones available - execute task directly
+                    logger.warning("No drones available, QueenAgent executing task directly")
                     await self._execute_task_directly(message.content, message.request_id)
                 
             except Exception as e:
@@ -742,7 +784,7 @@ class EnhancedQueenAgent(BaseAgent):
                 for task in self.task_graph.values()
                 if task.completed_at and task.started_at
             ]) / max(len(self.completed_tasks), 1),
-            'parallel_efficiency': len(self.completed_tasks) / len(self.worker_agents) if self.worker_agents else 0
+            'parallel_efficiency': len(self.completed_tasks) / len(self.drone_agents) if self.drone_agents else 0
         }
 
     def _reset_task_state(self):
@@ -752,9 +794,9 @@ class EnhancedQueenAgent(BaseAgent):
         self.completed_tasks.clear()
         self.failed_tasks.clear()
         
-        # Reset worker loads but keep performance history
-        for worker_id in self.worker_performance:
-            self.worker_performance[worker_id]['current_load'] = 0
+        # Reset drone loads but keep performance history
+        for drone_id in self.worker_performance:
+            self.worker_performance[drone_id]['current_load'] = 0
 
     async def _handle_group_response(self, message: AgentMessage):
         """Handle responses from sub-queen agents"""
@@ -1378,6 +1420,117 @@ Your NGINX server will be available at http://localhost"""
         except Exception as e:
             logger.error(f"Docker project creation failed: {e}")
             await self.send_message("orchestrator", "final-error", f"Docker project creation failed: {e}", request_id)
+
+    def _initialize_drone_roles(self):
+        """Initialize drone roles for available drones"""
+        available_roles = list(DroneRole)
+        for i, drone in enumerate(self.drone_agents):
+            # Assign roles in round-robin fashion initially
+            role = available_roles[i % len(available_roles)]
+            self.drone_roles[drone.agent_id] = role
+            
+            # Update drone role if it supports it
+            if hasattr(drone, 'role'):
+                drone.role = role
+                if hasattr(drone, '_get_role_capabilities'):
+                    drone.capabilities = drone._get_role_capabilities()
+                    
+    def _get_role_skills(self, role: DroneRole) -> List[str]:
+        """Get skills associated with a specific role"""
+        role_skills = {
+            DroneRole.ANALYST: [
+                "data_analysis", "report_generation", "pattern_recognition",
+                "statistical_analysis", "visualization", "documentation"
+            ],
+            DroneRole.DATA_SCIENTIST: [
+                "machine_learning", "data_preprocessing", "model_training",
+                "feature_engineering", "statistical_modeling", "python_analysis"
+            ],
+            DroneRole.IT_ARCHITECT: [
+                "system_design", "infrastructure_planning", "scalability_design",
+                "security_architecture", "technology_selection", "diagram_creation"
+            ],
+            DroneRole.DEVELOPER: [
+                "coding", "debugging", "testing", "deployment",
+                "version_control", "code_review", "problem_solving"
+            ]
+        }
+        return role_skills.get(role, ['general'])
+        
+    def _determine_task_role(self, task: str) -> DroneRole:
+        """Determine the most appropriate role for a given task"""
+        task_lower = task.lower()
+        
+        # Keywords that suggest specific roles
+        role_keywords = {
+            DroneRole.DATA_SCIENTIST: [
+                'machine learning', 'ml', 'model', 'train', 'predict', 'dataset',
+                'pandas', 'numpy', 'scikit', 'tensorflow', 'pytorch', 'analysis',
+                'statistics', 'correlation', 'regression', 'classification'
+            ],
+            DroneRole.ANALYST: [
+                'analyze', 'report', 'document', 'review', 'assess', 'evaluate',
+                'metrics', 'dashboard', 'visualization', 'chart', 'graph',
+                'insights', 'trends', 'patterns', 'summary'
+            ],
+            DroneRole.IT_ARCHITECT: [
+                'architecture', 'design', 'system', 'infrastructure', 'scalability',
+                'microservices', 'api', 'database', 'security', 'deployment',
+                'cloud', 'docker', 'kubernetes', 'architecture'
+            ],
+            DroneRole.DEVELOPER: [
+                'code', 'develop', 'implement', 'build', 'create', 'program',
+                'function', 'class', 'script', 'application', 'web', 'frontend',
+                'backend', 'debug', 'test', 'fix'
+            ]
+        }
+        
+        # Score each role based on keyword matches
+        role_scores = {}
+        for role, keywords in role_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in task_lower)
+            role_scores[role] = score
+            
+        # Return role with highest score, default to DEVELOPER
+        best_role = max(role_scores.items(), key=lambda x: x[1])
+        return best_role[0] if best_role[1] > 0 else DroneRole.DEVELOPER
+        
+    def _get_role_context(self, role: DroneRole) -> str:
+        """Get context description for a specific role"""
+        role_contexts = {
+            DroneRole.ANALYST: "Focus on data analysis, pattern recognition, and generating comprehensive reports with actionable insights.",
+            DroneRole.DATA_SCIENTIST: "Focus on machine learning, statistical analysis, data preprocessing, and data-driven insights using scientific methodologies.",
+            DroneRole.IT_ARCHITECT: "Focus on system design, scalability, security architecture, and infrastructure planning with enterprise-grade solutions.",
+            DroneRole.DEVELOPER: "Focus on coding, implementation, testing, and creating functional, maintainable software solutions."
+        }
+        return role_contexts.get(role, "Complete the assigned task with professional expertise.")
+        
+    def get_drone_status_report(self) -> Dict[str, Any]:
+        """Get comprehensive status report of all drones and their roles"""
+        drone_status = []
+        for drone in self.drone_agents:
+            role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+            performance = self.worker_performance.get(drone.agent_id, {})
+            
+            drone_status.append({
+                'agent_id': drone.agent_id,
+                'name': drone.name,
+                'role': role.value,
+                'skills': self._get_role_skills(role),
+                'current_load': performance.get('current_load', 0),
+                'completed_tasks': performance.get('completed_tasks', 0),
+                'failed_tasks': performance.get('failed_tasks', 0),
+                'reliability_score': performance.get('reliability_score', 1.0)
+            })
+            
+        return {
+            'total_drones': len(self.drone_agents),
+            'role_distribution': {role.value: sum(1 for r in self.drone_roles.values() if r == role) for role in DroneRole},
+            'active_tasks': len(self.active_tasks),
+            'completed_tasks': len(self.completed_tasks),
+            'failed_tasks': len(self.failed_tasks),
+            'drone_details': drone_status
+        }
 
     def __del__(self):
         """Cleanup executor on destruction"""
