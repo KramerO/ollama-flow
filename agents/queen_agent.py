@@ -43,14 +43,26 @@ class QueenAgent(BaseAgent):
             raw_response = response["message"]["content"]
             print(f"[QueenAgent] Decomposition LLM Raw Response: {raw_response}")
             try:
-                subtasks = json.loads(raw_response)
+                # Clean the response - remove markdown code blocks
+                cleaned_response = raw_response.strip()
+                if cleaned_response.startswith('```json'):
+                    cleaned_response = cleaned_response[7:]  # Remove ```json
+                if cleaned_response.startswith('```'):
+                    cleaned_response = cleaned_response[3:]   # Remove ```
+                if cleaned_response.endswith('```'):
+                    cleaned_response = cleaned_response[:-3]  # Remove trailing ```
+                cleaned_response = cleaned_response.strip()
+                
+                subtasks = json.loads(cleaned_response)
                 if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
                     return subtasks
                 else:
                     print(f"[QueenAgent] LLM response is not a valid JSON array of strings. Falling back to single task.")
+                    print(f"[QueenAgent] Cleaned response was: {cleaned_response[:200]}...")
                     return [task]
             except json.JSONDecodeError as e:
                 print(f"[QueenAgent] JSON parsing failed: {e}. Falling back to single task.")
+                print(f"[QueenAgent] Raw response: {raw_response[:200]}...")
                 return [task]
         except Exception as e:
             print(f"[QueenAgent] Error during task decomposition: {e}. Falling back to single task.")
@@ -79,22 +91,25 @@ class QueenAgent(BaseAgent):
             DroneRole.DATA_SCIENTIST: [
                 'machine learning', 'ml', 'model', 'train', 'predict', 'dataset',
                 'pandas', 'numpy', 'scikit', 'tensorflow', 'pytorch', 'analysis',
-                'statistics', 'correlation', 'regression', 'classification'
+                'statistics', 'correlation', 'regression', 'classification',
+                'opencv', 'cv2', 'image recognition', 'computer vision', 'bildverarbeitung',
+                'bilderkennungs', 'bilderkennung', 'image processing', 'drone perspective',
+                'pattern recognition', 'feature detection', 'object detection'
             ],
             DroneRole.ANALYST: [
                 'analyze', 'report', 'document', 'review', 'assess', 'evaluate',
                 'metrics', 'dashboard', 'visualization', 'chart', 'graph',
-                'insights', 'trends', 'patterns', 'summary'
+                'insights', 'trends', 'patterns', 'summary', 'daten', 'data'
             ],
             DroneRole.IT_ARCHITECT: [
                 'architecture', 'design', 'system', 'infrastructure', 'scalability',
                 'microservices', 'api', 'database', 'security', 'deployment',
-                'cloud', 'docker', 'kubernetes', 'architecture'
+                'cloud', 'docker', 'kubernetes', 'projekt', 'project structure'
             ],
             DroneRole.DEVELOPER: [
                 'code', 'develop', 'implement', 'build', 'create', 'program',
                 'function', 'class', 'script', 'application', 'web', 'frontend',
-                'backend', 'debug', 'test', 'fix'
+                'backend', 'debug', 'test', 'fix', 'python', 'erstelle', 'baust'
             ]
         }
         
