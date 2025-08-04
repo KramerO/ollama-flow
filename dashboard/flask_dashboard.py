@@ -89,7 +89,13 @@ class FlaskDashboard:
         @self.app.route('/')
         def index():
             """Main dashboard page"""
-            return render_template('dashboard.html')
+            # Detect current architecture (default to HIERARCHICAL)
+            current_architecture = self._detect_current_architecture()
+            ascii_diagram = self._generate_ascii_architecture(current_architecture)
+            
+            return render_template('dashboard.html', 
+                                 architecture=current_architecture,
+                                 ascii_diagram=ascii_diagram)
         
         @self.app.route('/sessions')
         def sessions_page():
@@ -99,12 +105,22 @@ class FlaskDashboard:
         @self.app.route('/monitoring')
         def monitoring_page():
             """System monitoring page"""
-            return render_template('monitoring.html')
+            current_architecture = self._detect_current_architecture()
+            ascii_diagram = self._generate_ascii_architecture(current_architecture)
+            
+            return render_template('monitoring.html',
+                                 architecture=current_architecture,
+                                 ascii_diagram=ascii_diagram)
         
         @self.app.route('/neural')
         def neural_page():
             """Neural intelligence page"""
-            return render_template('neural.html')
+            current_architecture = self._detect_current_architecture()
+            ascii_diagram = self._generate_ascii_architecture(current_architecture)
+            
+            return render_template('neural.html',
+                                 architecture=current_architecture,
+                                 ascii_diagram=ascii_diagram)
         
         @self.app.route('/api/status')
         def api_status():
@@ -328,6 +344,114 @@ class FlaskDashboard:
                 
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+    
+    def _detect_current_architecture(self) -> str:
+        """Detect current system architecture"""
+        # Check if framework is running and has architecture info
+        if self.framework and hasattr(self.framework, 'config'):
+            return self.framework.config.get('architecture_type', 'HIERARCHICAL')
+        
+        # Try to detect from recent logs or processes
+        try:
+            import glob
+            import re
+            
+            log_patterns = [
+                "/home/oliver/Projects/ollama-flow/**/*.log",
+                "./**.log"
+            ]
+            
+            for pattern in log_patterns:
+                for log_file in glob.glob(pattern, recursive=True):
+                    try:
+                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()[-1000:]  # Last 1000 chars
+                            
+                        arch_match = re.search(r'Architecture: (\w+)', content)
+                        if arch_match:
+                            return arch_match.group(1)
+                    except:
+                        continue
+        except:
+            pass
+            
+        # Default to HIERARCHICAL
+        return 'HIERARCHICAL'
+    
+    def _generate_ascii_architecture(self, architecture: str) -> str:
+        """Generate ASCII art diagram for the given architecture"""
+        
+        if architecture == 'HIERARCHICAL':
+            return """
+                    ┌─────────────┐
+                    │    QUEEN    │
+                    │   (Master)  │
+                    └──────┬──────┘
+                           │
+               ┌───────────┼───────────┐
+               │                       │
+        ┌──────▼──────┐        ┌──────▼──────┐
+        │  SUB-QUEEN  │        │  SUB-QUEEN  │
+        │     (A)     │        │     (B)     │
+        └──────┬──────┘        └──────┬──────┘
+               │                       │
+         ┌─────┼─────┐           ┌─────┼─────┐
+         │           │           │           │
+    ┌────▼───┐  ┌────▼───┐  ┌────▼───┐  ┌────▼───┐
+    │ DRONE  │  │ DRONE  │  │ DRONE  │  │ DRONE  │
+    │   #1   │  │   #2   │  │   #3   │  │   #4   │
+    │analyst │  │data-sci│  │architect│  │developer│
+    └────────┘  └────────┘  └────────┘  └────────┘
+            """
+        
+        elif architecture == 'CENTRALIZED':
+            return """
+                    ┌─────────────┐
+                    │    QUEEN    │
+                    │ (Centralized)│
+                    └──────┬──────┘
+                           │
+            ┌──────────────┼──────────────┐
+            │              │              │
+            │         ┌────┼────┐         │
+            │         │         │         │
+       ┌────▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼────┐
+       │ DRONE  │ │ DRONE │ │ DRONE │ │ DRONE  │
+       │   #1   │ │   #2  │ │   #3  │ │   #4   │
+       │analyst │ │data-sci│ │architect│ │developer│
+       └────────┘ └───────┘ └───────┘ └────────┘
+               ▲       ▲       ▲       ▲
+               │       │       │       │
+               └───────┼───────┼───────┘
+                       │       │
+                   Direct Communication
+            """
+        
+        elif architecture == 'FULLY_CONNECTED':
+            return """
+           ┌─────────┐ ◄──────────► ┌─────────┐
+           │ AGENT 1 │               │ AGENT 2 │
+           │ analyst │ ◄─────┐ ┌────► │data-sci │
+           └─────────┘       │ │     └─────────┘
+                 ▲           │ │           ▲
+                 │           │ │           │
+                 ▼           │ │           ▼
+           ┌─────────┐       │ │     ┌─────────┐
+           │ AGENT 4 │ ◄─────┘ └────► │ AGENT 3 │
+           │developer│               │architect│
+           └─────────┘ ◄──────────► └─────────┘
+           
+           ═══ Peer-to-Peer Network ═══
+           All agents communicate directly
+            """
+        
+        else:
+            return """
+                ┌─────────────┐
+                │   UNKNOWN   │
+                │ ARCHITECTURE│
+                └─────────────┘
+            """
     
     def _setup_socketio_events(self):
         """Setup SocketIO events for real-time updates"""

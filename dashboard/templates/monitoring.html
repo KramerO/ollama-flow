@@ -358,6 +358,30 @@
                 </div>
             </div>
 
+            <!-- System Architecture Visualization -->
+            <div class="card wide-card">
+                <h3><i class="fas fa-sitemap"></i> Architecture: {{ architecture or 'HIERARCHICAL' }}</h3>
+                <div style="background: #1e293b; color: #e2e8f0; padding: 20px; border-radius: 12px; font-family: 'Monaco', 'Consolas', monospace; font-size: 0.8rem; overflow-x: auto; white-space: pre; line-height: 1.2;">{{ ascii_diagram or 'Loading architecture...' }}</div>
+                <div style="display: flex; justify-content: space-around; margin-top: 15px; font-size: 0.9rem; color: #6b7280;">
+                    <div style="text-align: center;">
+                        <strong>👑 Queens</strong><br>
+                        <span style="color: #f59e0b;">Orchestration</span>
+                    </div>
+                    <div style="text-align: center;">
+                        <strong>🤖 Sub-Queens</strong><br>
+                        <span style="color: #3b82f6;">Coordination</span>
+                    </div>
+                    <div style="text-align: center;">
+                        <strong>🚁 Drones</strong><br>
+                        <span style="color: #10b981;">Execution</span>
+                    </div>
+                    <div style="text-align: center;">
+                        <strong>⚡ Enhanced</strong><br>
+                        <span style="color: #8b5cf6;">Performance</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- System Log -->
             <div class="card wide-card">
                 <h3><i class="fas fa-terminal"></i> System Log</h3>

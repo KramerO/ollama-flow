@@ -386,6 +386,16 @@
                 </div>
             </div>
 
+            <!-- System Architecture -->
+            <div class="card">
+                <h3>🏗️ System Architecture: {{ architecture or 'HIERARCHICAL' }}</h3>
+                <div style="background: #1a1a1a; color: #10b981; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.75rem; overflow-x: auto; white-space: pre;">{{ ascii_diagram or 'Loading architecture...' }}</div>
+                <div style="margin-top: 1rem; font-size: 0.875rem; color: #666;">
+                    <p><strong>Current Mode:</strong> {{ architecture or 'HIERARCHICAL' }}</p>
+                    <p><strong>Features:</strong> Role-based agent specialization, intelligent task distribution</p>
+                </div>
+            </div>
+
             <!-- Performance Chart -->
             <div class="card">
                 <h3>System Performance</h3>
