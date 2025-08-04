@@ -41,6 +41,13 @@ class SubQueenAgent(BaseAgent):
                     cleaned_response = cleaned_response[:-3]  # Remove trailing ```
                 cleaned_response = cleaned_response.strip()
                 
+                # Fix Windows path separators and other escape sequences
+                import re
+                # Replace Windows path separators with forward slashes in paths
+                cleaned_response = re.sub(r'([A-Z]):\\([^"\\]+)', r'\1:/\2', cleaned_response)
+                # Escape remaining backslashes that aren't valid JSON escapes
+                cleaned_response = re.sub(r'\\(?!["\\bfnrt/])', r'\\\\', cleaned_response)
+                
                 subtasks = json.loads(cleaned_response)
                 if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
                     return subtasks
@@ -50,7 +57,9 @@ class SubQueenAgent(BaseAgent):
                     return [task]
             except json.JSONDecodeError as e:
                 print(f"[SubQueenAgent] JSON parsing failed: {e}. Falling back to single task.")
-                print(f"[SubQueenAgent] Raw response: {raw_response[:200]}...")
+                print(f"[SubQueenAgent] Raw response: {raw_response[:500]}...")
+                print(f"[SubQueenAgent] Cleaned response: {cleaned_response[:500]}...")
+                print(f"[SubQueenAgent] Error location: line {getattr(e, 'lineno', 'unknown')}, column {getattr(e, 'colno', 'unknown')}")
                 return [task]
         except Exception as e:
             print(f"[SubQueenAgent] Error during task decomposition: {e}. Falling back to single task.")
