@@ -186,6 +186,20 @@ Be practical and use command-line tools effectively. Respond with clear steps an
         # Parse and execute any commands found in the response
         await self._parse_and_execute_commands(result)
         
+        # Extract and save any Python code found in the response
+        if "python" in task.lower() or ".py" in task.lower() or "opencv" in task.lower():
+            extracted_code = self._extract_complete_python_code(result)
+            if extracted_code and self.project_folder_path:
+                # Determine filename based on task
+                filename = self._determine_filename(task)
+                file_path = os.path.join(self.project_folder_path, filename)
+                try:
+                    with open(file_path, "w", encoding='utf-8') as f:
+                        f.write(extracted_code)
+                    result += f"\n\n✅ Complete Python code saved to: {file_path}"
+                except Exception as e:
+                    result += f"\n❌ Error saving Python code: {e}"
+        
         return result
 
     def _get_role_capabilities(self) -> List[str]:
@@ -209,6 +223,91 @@ Be practical and use command-line tools effectively. Respond with clear steps an
             ]
         }
         return capabilities_map.get(self.role, [])
+    
+    def _get_role_context(self) -> str:
+        """Get role-specific context for enhanced prompts"""
+        role_contexts = {
+            DroneRole.ANALYST: """
+You are an ANALYST DRONE specializing in data analysis, reporting, and pattern recognition.
+Your expertise: Statistical analysis, data visualization, report generation, insights discovery.
+When given tasks, focus on analytical approaches and comprehensive documentation.
+""",
+            DroneRole.DATA_SCIENTIST: """
+You are a DATA SCIENTIST DRONE specializing in machine learning and data science.
+Your expertise: OpenCV, computer vision, ML models, data preprocessing, statistical modeling.
+When given coding tasks, write complete, functional Python code with proper imports and error handling.
+For OpenCV tasks, create comprehensive image processing and recognition systems.
+""",
+            DroneRole.IT_ARCHITECT: """
+You are an IT ARCHITECT DRONE specializing in system design and infrastructure.
+Your expertise: System architecture, scalability, security, cloud design, technology selection.
+When given tasks, focus on robust, scalable solutions with proper architecture patterns.
+""",
+            DroneRole.DEVELOPER: """
+You are a DEVELOPER DRONE specializing in coding and implementation.
+Your expertise: Python programming, debugging, testing, deployment, code optimization.
+When given coding tasks, write complete, functional code with proper structure and documentation.
+"""
+        }
+        return role_contexts.get(self.role, "You are a specialized drone agent.")
+    
+    def _extract_complete_python_code(self, response: str) -> str:
+        """Extract complete Python code from LLM response"""
+        import re
+        
+        # Try to find Python code blocks
+        python_patterns = [
+            r'```python\n([\s\S]*?)```',
+            r'```py\n([\s\S]*?)```',
+            r'```([\s\S]*?)```',  # Generic code block
+        ]
+        
+        for pattern in python_patterns:
+            matches = re.findall(pattern, response, re.MULTILINE)
+            if matches:
+                # Take the largest code block (most complete)
+                largest_match = max(matches, key=len)
+                if len(largest_match.strip()) > 50:  # Must have substantial content
+                    return largest_match.strip()
+        
+        # If no code blocks, look for Python imports and classes/functions
+        lines = response.split('\n')
+        python_lines = []
+        in_python_section = False
+        
+        for line in lines:
+            if any(keyword in line for keyword in ['import ', 'from ', 'def ', 'class ', 'if __name__']):
+                in_python_section = True
+            
+            if in_python_section:
+                python_lines.append(line)
+                
+            # Stop if we hit non-code content after starting
+            if in_python_section and line.strip() and not line.startswith(' ') and not any(c in line for c in ['import', 'from', 'def', 'class', '#', 'if', 'for', 'while', 'try', 'with']):
+                if not line.strip().replace(' ', '').replace('\t', '').isalnum():
+                    break
+        
+        if python_lines and len('\n'.join(python_lines).strip()) > 50:
+            return '\n'.join(python_lines).strip()
+        
+        return ""
+    
+    def _determine_filename(self, task: str) -> str:
+        """Determine appropriate filename based on task"""
+        task_lower = task.lower()
+        
+        if "opencv" in task_lower or "image" in task_lower or "bilderkennungs" in task_lower:
+            return "image_recognition.py"
+        elif "detect" in task_lower and "people" in task_lower:
+            return "detect_people.py"
+        elif "flask" in task_lower or "web" in task_lower:
+            return "app.py"
+        elif "ml" in task_lower or "machine learning" in task_lower:
+            return "ml_model.py"
+        elif "analysis" in task_lower or "analyze" in task_lower:
+            return "data_analysis.py"
+        else:
+            return "main.py"
 
     def _get_role_specific_prompt(self, task: str) -> str:
         """Get role-specific enhanced prompt for task execution"""

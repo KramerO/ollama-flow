@@ -43,10 +43,15 @@ class SubQueenAgent(BaseAgent):
                 
                 # Fix Windows path separators and other escape sequences
                 import re
-                # Replace Windows path separators with forward slashes in paths
-                cleaned_response = re.sub(r'([A-Z]):\\([^"\\]+)', r'\1:/\2', cleaned_response)
+                # More comprehensive Windows path fixing
+                # Replace D:\path\to\file with D:/path/to/file in JSON strings
+                cleaned_response = re.sub(r'([A-Z]):\\+([^"\\]*\\[^"\\]*)', lambda m: f'{m.group(1)}:/{m.group(2).replace(chr(92), "/")}', cleaned_response)
+                # Fix remaining Windows paths
+                cleaned_response = re.sub(r'([A-Z]):\\([^"]*)', r'\1:/\2', cleaned_response)
+                # Replace any remaining single backslashes with forward slashes in paths
+                cleaned_response = re.sub(r'([A-Z]:)/([^"]*?)\\([^"]*)', r'\1/\2/\3', cleaned_response)
                 # Escape remaining backslashes that aren't valid JSON escapes
-                cleaned_response = re.sub(r'\\(?!["\\bfnrt/])', r'\\\\', cleaned_response)
+                cleaned_response = re.sub(r'\\(?!["\\bfnrt/uU0-9a-fA-F])', r'\\\\', cleaned_response)
                 
                 subtasks = json.loads(cleaned_response)
                 if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
