@@ -69,15 +69,23 @@ async def main():
         elif ollama_model_from_env is not None:
             ollama_model = ollama_model_from_env
         else:
-            om_input = input("Enter Ollama model to use (default: llama3): ").strip()
-            ollama_model = om_input if om_input else "llama3"
+            # If all CLI args provided, use defaults instead of prompting
+            if args.task and args.drone_count and args.architecture_type:
+                ollama_model = "phi3:mini"  # Default for CLI usage
+            else:
+                om_input = input("Enter Ollama model to use (default: llama3): ").strip()
+                ollama_model = om_input if om_input else "llama3"
 
         # Determine project_folder
         project_folder = args.project_folder or os.getenv("OLLAMA_PROJECT_FOLDER")
         if not project_folder:
-            project_folder = input("Enter the project folder path (e.g., /tmp/my_project) (default: current directory): ").strip()
-            if not project_folder:
-                project_folder = os.getcwd()
+            # If all CLI args provided, use current directory instead of prompting
+            if args.task and args.drone_count and args.architecture_type:
+                project_folder = os.getcwd()  # Default for CLI usage
+            else:
+                project_folder = input("Enter the project folder path (e.g., /tmp/my_project) (default: current directory): ").strip()
+                if not project_folder:
+                    project_folder = os.getcwd()
 
         # Determine prompt (task)
         prompt = args.task
