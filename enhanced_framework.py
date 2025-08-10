@@ -7,6 +7,7 @@ Includes all fixes for the 5 identified issues:
 3. Code generation quality control
 4. Comprehensive error handling
 5. Graceful shutdown mechanisms
+6. Docker container support for agent execution
 """
 
 import asyncio
@@ -25,6 +26,14 @@ from orchestrator.orchestrator import Orchestrator
 from agents.queen_agent import QueenAgent
 from agents.sub_queen_agent import SubQueenAgent
 from agents.drone_agent import DroneAgent, DroneRole
+
+# Import Docker manager if available
+try:
+    from docker_manager import DockerManager
+    DOCKER_AVAILABLE = True
+except ImportError:
+    DOCKER_AVAILABLE = False
+    DockerManager = None
 
 # Configure logging
 logging.basicConfig(
@@ -45,13 +54,15 @@ class EnhancedOllamaFlow:
                  model: str = "phi3:mini",
                  drone_count: int = 4,
                  architecture: str = "HIERARCHICAL",
-                 auto_shutdown: bool = True):
+                 auto_shutdown: bool = True,
+                 docker_mode: bool = False):
         
         self.project_folder = Path(project_folder).resolve()
         self.model = model
         self.drone_count = drone_count
         self.architecture = architecture
         self.auto_shutdown = auto_shutdown
+        self.docker_mode = docker_mode
         
         # Enhanced database manager
         self.db_manager = None
@@ -59,6 +70,14 @@ class EnhancedOllamaFlow:
         self.agents = {}
         self.shutdown_event = asyncio.Event()
         self.tasks_completed = 0
+        
+        # Docker manager for container-based execution
+        self.docker_manager = None
+        if self.docker_mode and DOCKER_AVAILABLE:
+            self.docker_manager = DockerManager(str(self.project_folder))
+        elif self.docker_mode and not DOCKER_AVAILABLE:
+            logger.warning("🐳 Docker mode requested but Docker not available. Falling back to local execution.")
+            self.docker_mode = False
         
         # Setup signal handlers for graceful shutdown
         self._setup_signal_handlers()
@@ -68,6 +87,7 @@ class EnhancedOllamaFlow:
         logger.info(f"🤖 Model: {self.model}")
         logger.info(f"🔧 Architecture: {self.architecture}")
         logger.info(f"⚡ Auto-shutdown: {self.auto_shutdown}")
+        logger.info(f"🐳 Docker mode: {self.docker_mode}")
     
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""

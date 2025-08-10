@@ -1,0 +1,88 @@
+# Docker ignore file for Ollama Flow
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation
+docs/_build/
+*.md
+README.md
+CHANGELOG.md
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Project specific
+logs/
+data/
+tmp/
+*.sqlite
+*.db
+.env.local
+.env.production
+
+# Large submodules - will be handled separately if needed
+llama.cpp/
+Pillow/
+node_modules/
+
+# Development and test files
+test_*.py
+*_test.py
+dev_*.py
+demo_*.py

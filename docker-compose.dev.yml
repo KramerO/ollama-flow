@@ -1,0 +1,49 @@
+# Development Docker Compose configuration
+# For development with hot-reload and debugging
+
+version: '3.8'
+
+services:
+  # Development Redis with debug logging
+  redis-dev:
+    image: redis:7.2-alpine
+    container_name: ollama-flow-redis-dev
+    ports:
+      - "6380:6379"  # Different port for dev
+    volumes:
+      - ./data/redis-dev:/data
+    command: redis-server --appendonly yes --loglevel verbose
+    networks:
+      - ollama-flow-dev-net
+
+  # Development Ollama Flow with hot-reload
+  ollama-flow-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ollama-flow-dev
+    ports:
+      - "8081:8080"  # Different port for dev
+      - "5678:5678"  # Debug port
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis-dev
+      - REDIS_PORT=6379
+      - OLLAMA_HOST=host.docker.internal:11434
+      - DOCKER_MODE=true
+      - DEBUG_MODE=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app  # Mount entire source for hot-reload
+      - /app/__pycache__  # Exclude cache
+      - /app/.git  # Exclude git
+    depends_on:
+      - redis-dev
+    networks:
+      - ollama-flow-dev-net
+    stdin_open: true
+    tty: true
+
+networks:
+  ollama-flow-dev-net:
+    driver: bridge
