@@ -59,12 +59,6 @@ class SubQueenAgent(BaseAgent):
             else:
                 print(f"[SubQueenAgent] All parsing strategies failed. Falling back to single task.")
                 return [task]
-            except json.JSONDecodeError as e:
-                print(f"[SubQueenAgent] JSON parsing failed: {e}. Falling back to single task.")
-                print(f"[SubQueenAgent] Raw response: {raw_response[:500]}...")
-                print(f"[SubQueenAgent] Cleaned response: {cleaned_response[:500]}...")
-                print(f"[SubQueenAgent] Error location: line {getattr(e, 'lineno', 'unknown')}, column {getattr(e, 'colno', 'unknown')}")
-                return [task]
                 
         except Exception as e:
             print(f"[SubQueenAgent] Error during task decomposition: {e}. Falling back to single task.")
