@@ -15,7 +15,7 @@ except ImportError:
     print("⚠️ Enhanced database manager not available, using standard version")
 
 class Orchestrator:
-    def __init__(self, db_manager=None, model: str = "phi3:mini"):
+    def __init__(self, db_manager=None, model: str = "llama3:latest"):
         # Use enhanced database manager if available and none provided
         if db_manager is None:
             if ENHANCED_DB_AVAILABLE:
