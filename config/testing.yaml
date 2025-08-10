@@ -1,0 +1,19 @@
+agents:
+  enable_code_generation: true
+  enable_command_execution: true
+  max_agents: 10
+database:
+  echo: false
+  url: 'sqlite:///:memory:'
+llm:
+  default_model: llama3
+  enable_caching: true
+  max_model_size_gb: 5.5
+  request_timeout: 300
+logging:
+  level: WARNING
+performance:
+  database_poll_interval: 0.1
+security:
+  enable_command_whitelist: true
+  max_command_timeout: 60

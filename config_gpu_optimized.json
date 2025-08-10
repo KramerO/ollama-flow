@@ -1,0 +1,51 @@
+{
+  "default_backend": "ollama",
+  "environment": "production",
+  "project_root": "/home/oliver/projects/ollama-flow",
+  "database": {
+    "path": "ollama_flow_messages.db",
+    "timeout": 60,
+    "pool_size": 8,
+    "cleanup_interval_hours": 12
+  },
+  "agents": {
+    "default_model": "llama3",
+    "max_workers": 12,
+    "task_timeout": 1200,
+    "polling_interval": 0.05,
+    "max_subtasks": 16
+  },
+  "security": {
+    "enable_sandboxing": true,
+    "allowed_file_extensions": [".py", ".txt", ".md", ".json", ".cpp", ".h", ".js", ".ts"],
+    "max_file_size_mb": 50,
+    "max_output_length": 25000,
+    "validate_commands": true
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file_path": "ollama_flow_gpu.log",
+    "max_file_size_mb": 100,
+    "backup_count": 5,
+    "enable_structured_logging": true
+  },
+  "performance": {
+    "enable_metrics": true,
+    "circuit_breaker_threshold": 8,
+    "circuit_breaker_timeout": 15,
+    "request_timeout": 300,
+    "max_concurrent_requests": 16
+  },
+  "backends": {
+    "ollama": {
+      "enabled": true,
+      "config": {
+        "gpu_acceleration": true,
+        "opencl_enabled": true,
+        "vulkan_enabled": true
+      },
+      "priority": 1
+    }
+  }
+}

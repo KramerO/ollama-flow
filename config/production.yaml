@@ -1,0 +1,23 @@
+agents:
+  enable_code_generation: true
+  enable_command_execution: true
+  max_agents: 10
+database:
+  echo: false
+  url: sqlite:///data/prod_ollama_flow.db
+debug: false
+llm:
+  default_model: llama3
+  enable_caching: true
+  max_model_size_gb: 5.5
+  request_timeout: 300
+logging:
+  file: logs/prod_ollama_flow.log
+  level: INFO
+performance:
+  database_poll_interval: 1.0
+  enable_async_db: true
+  enable_request_batching: true
+security:
+  enable_command_whitelist: true
+  enable_file_restrictions: true

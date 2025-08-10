@@ -1,0 +1,64 @@
+================================================================================
+OLLAMA FLOW ENHANCED RESEARCH REPORT
+================================================================================
+
+Anfrage: Frauke Brosius-Gersdorf Hetzkampagne
+Workflow ID: dac3ad8e-e921-4729-93da-45aa154c41ba
+Status: completed
+Vertrauenswert: 0.29/1.0
+Erstellt: 2025-08-09T20:18:44.391110
+
+RECHERCHE-ERGEBNISSE
+----------------------------------------
+
+Drohne 1: researcher_1_enhanced
+Typ: enhanced
+Vertrauen: 0.31
+Social Media Quellen: 1
+  • Instagram: 1 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 1 Social Media Ergebnissen
+
+Drohne 2: researcher_2_enhanced
+Typ: enhanced
+Vertrauen: 0.31
+Social Media Quellen: 1
+  • Instagram: 1 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 1 Social Media Ergebnissen
+
+Drohne 3: researcher_3
+Typ: traditional
+Vertrauen: 0.30
+Fakten:
+  • Recherche zu: Aktuelle Trends und Zukunftsperspektiven zu: Frauke Brosius-Gersdorf Hetzkampagne
+  • Wichtige Suchbegriffe: aktuelle, trends, zukunftsperspektiven, frauke, brosius-gersdorf
+  • Hinweis: LLM-basierte Recherche nicht verfügbar, nutze Enhanced Mode für bessere Ergebnisse
+Perspektiven:
+  • Themenbereich: Aktuelle Trends und Zukunftsperspektiven zu: Frauke Brosius-Gersdorf Hetzkampagne
+  • Verschiedene Aspekte sollten durch Enhanced Mode abgedeckt werden
+
+FACT-CHECK ERGEBNISSE
+----------------------------------------
+
+Validiert: 0/2
+
+Fact-Check 1: factchecker_1
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+Fact-Check 2: factchecker_2
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+ANALYSE-ERGEBNISSE
+----------------------------------------
+
+Analyse 1: analyst_1
+Vertrauen: 0.00
+
+Analyse 2: analyst_2
+Vertrauen: 0.00
+
+--------------------------------------------------------------------------------
+Erstellt mit Ollama Flow Multi-Role System
+Enhanced Mode: True
+--------------------------------------------------------------------------------

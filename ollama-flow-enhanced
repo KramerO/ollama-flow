@@ -1,0 +1,701 @@
+#!/bin/bash
+
+# Ollama Flow Enhanced CLI v2.0
+# Command-line interface for the refactored Ollama Flow system
+# Supports all new features: UnifiedAgent, capabilities, configuration management
+
+set -e
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_MAIN="$SCRIPT_DIR/enhanced_main.py"
+CONFIG_DIR="$SCRIPT_DIR/config"
+VENV_PATH="$SCRIPT_DIR/ollama-flow-env"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Print functions
+print_header() {
+    echo -e "${PURPLE}"
+    echo "🚀 OLLAMA FLOW ENHANCED CLI v2.0"
+    echo "Multi-AI Agent System with Unified Architecture"
+    echo -e "${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+print_info() {
+    echo -e "${CYAN}ℹ️  $1${NC}"
+}
+
+# Activate virtual environment if available
+activate_venv() {
+    if [ -d "$VENV_PATH" ] && [ -f "$VENV_PATH/bin/activate" ]; then
+        source "$VENV_PATH/bin/activate"
+        print_info "Virtual environment activated"
+    fi
+}
+
+# Check system requirements
+check_requirements() {
+    # Check Python
+    if ! command -v python3 >/dev/null 2>&1; then
+        print_error "Python 3 not found. Please install Python 3.8+"
+        exit 1
+    fi
+    
+    # Check Ollama
+    if ! command -v ollama >/dev/null 2>&1; then
+        print_warning "Ollama not found. Some features may not work."
+        print_info "Install Ollama: curl -fsSL https://ollama.ai/install.sh | sh"
+    fi
+    
+    # Check main Python file
+    if [ ! -f "$PYTHON_MAIN" ]; then
+        print_error "Main Python script not found: $PYTHON_MAIN"
+        print_info "Please ensure you're running from the correct directory"
+        exit 1
+    fi
+}
+
+# Show comprehensive help
+show_help() {
+    print_header
+    echo ""
+    echo -e "${CYAN}USAGE:${NC}"
+    echo "  ollama-flow-enhanced [COMMAND] [OPTIONS]"
+    echo ""
+    echo -e "${CYAN}COMMANDS:${NC}"
+    echo -e "${BLUE}Core Operations:${NC}"
+    echo "  run <task>              Execute task with unified agents"
+    echo "  test                    Run comprehensive system tests"
+    echo "  config                  Manage configuration"
+    echo "  status                  Show system status"
+    echo "  models                  Manage LLM models"
+    echo ""
+    echo -e "${BLUE}Advanced Features:${NC}"
+    echo "  dashboard               Launch monitoring dashboard"
+    echo "  monitor                 Real-time system monitoring"
+    echo "  roles                   Manage agent roles"
+    echo "  capabilities            Show available capabilities"
+    echo "  benchmark               Run performance benchmarks"
+    echo ""
+    echo -e "${BLUE}Maintenance:${NC}"
+    echo "  install                 Install/update dependencies"
+    echo "  doctor                  System health check"
+    echo "  clean                   Clean temporary files"
+    echo "  version                 Show version information"
+    echo ""
+    echo -e "${CYAN}RUN OPTIONS:${NC}"
+    echo "  --task <description>    Task description (required)"
+    echo "  --workers N             Number of workers (default: 4)"
+    echo "  --model <name>          Specific LLM model to use"
+    echo "  --role <role>           Force specific role assignment"
+    echo "  --capabilities <list>   Enable specific capabilities"
+    echo "  --project-folder <path> Working directory"
+    echo "  --config <file>         Configuration file"
+    echo "  --environment <env>     Environment (dev/prod/test)"
+    echo "  --debug                 Enable debug mode"
+    echo "  --verbose               Verbose output"
+    echo "  --parallel              Enable parallel processing"
+    echo ""
+    echo -e "${CYAN}EXAMPLES:${NC}"
+    echo "  # Basic task execution"
+    echo "  ollama-flow-enhanced run \"Create a Python web scraper\""
+    echo ""
+    echo "  # Advanced task with specific configuration"
+    echo "  ollama-flow-enhanced run \"Build ML pipeline\" \\"
+    echo "    --workers 8 --model codellama:7b --role datascientist \\"
+    echo "    --capabilities code_generation,security_analysis --debug"
+    echo ""
+    echo "  # System management"
+    echo "  ollama-flow-enhanced test --comprehensive"
+    echo "  ollama-flow-enhanced config --environment production"
+    echo "  ollama-flow-enhanced dashboard --port 8080"
+    echo "  ollama-flow-enhanced roles --list --stats"
+    echo ""
+    echo -e "${CYAN}CONFIGURATION:${NC}"
+    echo "  Config Directory: $CONFIG_DIR"
+    echo "  Main Script: $PYTHON_MAIN"
+    echo "  Virtual Environment: $VENV_PATH"
+    echo ""
+    echo -e "${CYAN}MORE HELP:${NC}"
+    echo "  Documentation: $SCRIPT_DIR/README.md"
+    echo "  Report Issues: $SCRIPT_DIR/ISSUES.md"
+    echo "  Examples: $SCRIPT_DIR/examples/"
+}
+
+# Execute task with unified agent system
+run_task() {
+    local task="$1"
+    shift
+    
+    if [ -z "$task" ]; then
+        print_error "Task description required"
+        echo "Usage: ollama-flow-enhanced run \"task description\" [options]"
+        exit 1
+    fi
+    
+    print_info "Starting task execution with Unified Agent System"
+    print_info "Task: $task"
+    
+    # Build Python command
+    local python_args=(
+        "--task" "$task"
+        "--project-folder" "$(pwd)"
+    )
+    
+    # Parse additional arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --workers)
+                python_args+=("--workers" "$2")
+                shift 2
+                ;;
+            --model)
+                python_args+=("--model" "$2")
+                shift 2
+                ;;
+            --role)
+                python_args+=("--role" "$2")
+                shift 2
+                ;;
+            --capabilities)
+                python_args+=("--capabilities" "$2")
+                shift 2
+                ;;
+            --project-folder)
+                python_args+=("--project-folder" "$2")
+                shift 2
+                ;;
+            --config)
+                python_args+=("--config" "$2")
+                shift 2
+                ;;
+            --environment)
+                export OLLAMA_FLOW_ENVIRONMENT="$2"
+                shift 2
+                ;;
+            --debug)
+                python_args+=("--debug")
+                shift
+                ;;
+            --verbose)
+                python_args+=("--verbose")
+                shift
+                ;;
+            --parallel)
+                python_args+=("--parallel")
+                shift
+                ;;
+            *)
+                print_warning "Unknown option: $1"
+                shift
+                ;;
+        esac
+    done
+    
+    # Execute with proper environment
+    PYTHONPATH="$SCRIPT_DIR" python3 "$PYTHON_MAIN" "${python_args[@]}"
+}
+
+# Run comprehensive system tests
+run_tests() {
+    print_info "Running comprehensive system tests..."
+    
+    local test_type="basic"
+    if [ "$1" = "--comprehensive" ]; then
+        test_type="comprehensive"
+    fi
+    
+    case "$test_type" in
+        "comprehensive")
+            print_info "Running comprehensive test suite..."
+            PYTHONPATH="$SCRIPT_DIR" python3 "$SCRIPT_DIR/tests/comprehensive_system_test.py"
+            ;;
+        "basic")
+            print_info "Running basic system tests..."
+            # Quick configuration test
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from config.settings import get_settings
+settings = get_settings()
+print(f'✅ Configuration loaded: {settings.environment.value}')
+"
+            
+            # Quick component test
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from llm_chooser import get_llm_chooser
+from agents.role_manager import get_role_manager
+chooser = get_llm_chooser()
+role_mgr = get_role_manager()
+print(f'✅ LLM Chooser: {len(chooser.available_models)} models available')
+print(f'✅ Role Manager: {len(role_mgr.role_keywords)} roles configured')
+"
+            print_success "Basic tests completed"
+            ;;
+    esac
+}
+
+# Configuration management
+manage_config() {
+    local action="$1"
+    shift
+    
+    case "$action" in
+        "--show"|"--list"|"")
+            print_info "Current configuration:"
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from config.settings import get_settings
+settings = get_settings()
+print(f'Environment: {settings.environment.value}')
+print(f'Debug Mode: {settings.debug}')
+print(f'Default LLM: {settings.llm.default_model}')
+print(f'Max Agents: {settings.agents.max_agents}')
+print(f'Database: {settings.database.url}')
+print(f'Config Directory: {settings.config_dir}')
+"
+            ;;
+        "--environment")
+            if [ -n "$1" ]; then
+                export OLLAMA_FLOW_ENVIRONMENT="$1"
+                print_info "Environment set to: $1"
+            else
+                print_error "Environment name required"
+            fi
+            ;;
+        "--create-defaults")
+            print_info "Creating default configuration files..."
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from config.settings import create_default_configs
+create_default_configs()
+print('✅ Default configurations created')
+"
+            ;;
+        "--validate")
+            print_info "Validating configuration..."
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from config.settings import get_settings
+try:
+    settings = get_settings()
+    print('✅ Configuration is valid')
+    print(f'Environment: {settings.environment.value}')
+except Exception as e:
+    print(f'❌ Configuration error: {e}')
+    exit(1)
+"
+            ;;
+        *)
+            echo "Configuration management:"
+            echo "  --show              Show current configuration"
+            echo "  --environment <env> Set environment (dev/prod/test)"
+            echo "  --create-defaults   Create default config files"
+            echo "  --validate          Validate configuration"
+            ;;
+    esac
+}
+
+# Show system status
+show_status() {
+    print_header
+    echo ""
+    
+    print_info "System Status Check"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Basic system info
+    echo -e "${BLUE}System Information:${NC}"
+    echo "  OS: $(uname -s) $(uname -r)"
+    echo "  Python: $(python3 --version)"
+    echo "  Working Directory: $(pwd)"
+    echo "  Script Directory: $SCRIPT_DIR"
+    
+    # Ollama status
+    echo -e "\n${BLUE}Ollama Status:${NC}"
+    if command -v ollama >/dev/null 2>&1; then
+        echo "  Version: $(ollama --version 2>/dev/null || echo 'Unknown')"
+        if pgrep -x "ollama" > /dev/null; then
+            echo "  Service: 🟢 Running"
+            echo "  Models: $(ollama list 2>/dev/null | wc -l || echo '0') installed"
+        else
+            echo "  Service: 🔴 Not running"
+        fi
+    else
+        echo "  Status: 🔴 Not installed"
+    fi
+    
+    # Ollama Flow status
+    echo -e "\n${BLUE}Ollama Flow Status:${NC}"
+    if [ -f "$PYTHON_MAIN" ]; then
+        echo "  Main Script: 🟢 Found"
+    else
+        echo "  Main Script: 🔴 Missing"
+    fi
+    
+    if [ -d "$CONFIG_DIR" ]; then
+        echo "  Configuration: 🟢 Found"
+    else
+        echo "  Configuration: 🔴 Missing"
+    fi
+    
+    # Configuration details
+    echo -e "\n${BLUE}Configuration:${NC}"
+    PYTHONPATH="$SCRIPT_DIR" python3 -c "
+try:
+    from config.settings import get_settings
+    settings = get_settings()
+    print(f'  Environment: {settings.environment.value}')
+    print(f'  Debug Mode: {\"🟢\" if settings.debug else \"🔴\"} {settings.debug}')
+    print(f'  Default Model: {settings.llm.default_model}')
+    print(f'  Max Agents: {settings.agents.max_agents}')
+except Exception as e:
+    print(f'  Status: 🔴 Configuration error: {e}')
+" 2>/dev/null || echo "  Status: 🔴 Configuration not accessible"
+    
+    # Available models
+    echo -e "\n${BLUE}Available Models:${NC}"
+    PYTHONPATH="$SCRIPT_DIR" python3 -c "
+try:
+    from llm_chooser import get_llm_chooser
+    chooser = get_llm_chooser()
+    models = chooser.available_models
+    print(f'  Count: {len(models)}')
+    for model in models[:5]:  # Show first 5
+        print(f'  • {model}')
+    if len(models) > 5:
+        print(f'  ... and {len(models) - 5} more')
+except Exception as e:
+    print(f'  Status: 🔴 Error: {e}')
+" 2>/dev/null || echo "  Status: 🔴 Not accessible"
+    
+    # System resources
+    echo -e "\n${BLUE}System Resources:${NC}"
+    if command -v free >/dev/null 2>&1; then
+        local mem_info=$(free -h | grep '^Mem:')
+        echo "  Memory: $(echo $mem_info | awk '{print $3 \"/\" $2}')"
+    fi
+    
+    if command -v df >/dev/null 2>&1; then
+        local disk_info=$(df -h "$SCRIPT_DIR" | tail -1)
+        echo "  Disk: $(echo $disk_info | awk '{print $3 \"/\" $2 \" (\" $5 \" used)\"}')"
+    fi
+    
+    echo ""
+    print_success "Status check completed"
+}
+
+# Model management
+manage_models() {
+    local action="$1"
+    shift
+    
+    case "$action" in
+        "--list"|"")
+            print_info "Available models:"
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from llm_chooser import get_llm_chooser
+chooser = get_llm_chooser()
+for i, model in enumerate(chooser.available_models, 1):
+    info = chooser.get_model_info(model)
+    strengths = ', '.join(info.get('strengths', ['general']))
+    print(f'{i:2d}. {model:<20} - {strengths}')
+"
+            ;;
+        "--download")
+            if [ -n "$1" ]; then
+                print_info "Downloading model: $1"
+                ollama pull "$1"
+            else
+                print_error "Model name required"
+            fi
+            ;;
+        "--test")
+            print_info "Testing model selection for different roles..."
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from llm_chooser import get_llm_chooser
+chooser = get_llm_chooser()
+roles = ['developer', 'security_specialist', 'analyst', 'datascientist', 'it_architect']
+for role in roles:
+    model = chooser.choose_model_for_role(role, f'Test task for {role}')
+    print(f'{role:<20} -> {model}')
+"
+            ;;
+        *)
+            echo "Model management:"
+            echo "  --list          List available models"
+            echo "  --download <model>  Download specific model"
+            echo "  --test          Test model selection"
+            ;;
+    esac
+}
+
+# Role management
+manage_roles() {
+    local action="$1"
+    shift
+    
+    case "$action" in
+        "--list"|"")
+            print_info "Available roles:"
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from agents.role_manager import get_role_manager, DroneRole
+rm = get_role_manager()
+for role in DroneRole:
+    capabilities = rm.capabilities_map.get(role, [])
+    print(f'{role.value:<20} - {len(capabilities)} capabilities')
+"
+            ;;
+        "--stats")
+            print_info "Role assignment statistics:"
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from agents.role_manager import get_role_manager
+rm = get_role_manager()
+stats = rm.get_role_statistics()
+if stats:
+    for role, count in stats.items():
+        print(f'{role:<20} - {count} assignments')
+else:
+    print('No assignment history available')
+"
+            ;;
+        "--test")
+            print_info "Testing role assignment for sample tasks..."
+            PYTHONPATH="$SCRIPT_DIR" python3 -c "
+from agents.role_manager import get_role_manager
+rm = get_role_manager()
+tasks = [
+    'Implement machine learning model with TensorFlow',
+    'Analyze security vulnerabilities in web application', 
+    'Design microservices architecture',
+    'Create Python web scraper',
+    'Build business intelligence dashboard'
+]
+for i, task in enumerate(tasks, 1):
+    role, capabilities = rm.assign_role(f'test_{i}', f'TestAgent{i}', task)
+    print(f'{task[:50]:<52} -> {role.value}')
+"
+            ;;
+        *)
+            echo "Role management:"
+            echo "  --list          List available roles"
+            echo "  --stats         Show assignment statistics"  
+            echo "  --test          Test role assignment"
+            ;;
+    esac
+}
+
+# System doctor (health check)
+system_doctor() {
+    print_info "Running system health check..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    local issues=0
+    
+    # Check Python version
+    if python3 -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev/null; then
+        print_success "Python version check"
+    else
+        print_error "Python 3.8+ required"
+        ((issues++))
+    fi
+    
+    # Check required packages
+    local packages=("pydantic" "pydantic_settings" "yaml" "asyncio")
+    for package in "${packages[@]}"; do
+        if python3 -c "import $package" 2>/dev/null; then
+            print_success "Package $package available"
+        else
+            print_error "Package $package missing"
+            ((issues++))
+        fi
+    done
+    
+    # Check Ollama
+    if command -v ollama >/dev/null 2>&1; then
+        print_success "Ollama executable found"
+        
+        if pgrep -x "ollama" > /dev/null; then
+            print_success "Ollama service running"
+        else
+            print_warning "Ollama service not running"
+        fi
+    else
+        print_error "Ollama not installed"
+        ((issues++))
+    fi
+    
+    # Check configuration
+    if PYTHONPATH="$SCRIPT_DIR" python3 -c "from config.settings import get_settings; get_settings()" 2>/dev/null; then
+        print_success "Configuration loading"
+    else
+        print_error "Configuration loading failed"
+        ((issues++))
+    fi
+    
+    # Check core components
+    if PYTHONPATH="$SCRIPT_DIR" python3 -c "from llm_chooser import get_llm_chooser; get_llm_chooser()" 2>/dev/null; then
+        print_success "LLM Chooser component"
+    else
+        print_error "LLM Chooser component failed"
+        ((issues++))
+    fi
+    
+    if PYTHONPATH="$SCRIPT_DIR" python3 -c "from agents.role_manager import get_role_manager; get_role_manager()" 2>/dev/null; then
+        print_success "Role Manager component"
+    else
+        print_error "Role Manager component failed"
+        ((issues++))
+    fi
+    
+    # Check file permissions
+    if [ -x "$SCRIPT_DIR/ollama-flow-enhanced" ]; then
+        print_success "CLI script executable"
+    else
+        print_warning "CLI script not executable"
+        chmod +x "$SCRIPT_DIR/ollama-flow-enhanced" 2>/dev/null || true
+    fi
+    
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ $issues -eq 0 ]; then
+        print_success "System health check passed! No issues found."
+    else
+        print_warning "$issues issue(s) found. See details above."
+        print_info "Run 'ollama-flow-enhanced install' to fix dependency issues"
+    fi
+}
+
+# Install/update dependencies
+install_deps() {
+    print_info "Installing/updating dependencies..."
+    
+    # Install required Python packages
+    python3 -m pip install --upgrade pip
+    python3 -m pip install --user \
+        pydantic \
+        pydantic-settings \
+        python-dotenv \
+        pyyaml \
+        asyncio \
+        aiofiles \
+        psutil \
+        typing-extensions
+    
+    print_success "Dependencies updated"
+    
+    # Create virtual environment if requested
+    if [ "$1" = "--venv" ]; then
+        if [ ! -d "$VENV_PATH" ]; then
+            print_info "Creating virtual environment..."
+            python3 -m venv "$VENV_PATH"
+        fi
+        
+        source "$VENV_PATH/bin/activate"
+        pip install --upgrade pip
+        pip install -r requirements.txt 2>/dev/null || true
+        print_success "Virtual environment updated"
+    fi
+}
+
+# Clean temporary files
+clean_files() {
+    print_info "Cleaning temporary files..."
+    
+    # Remove Python cache
+    find "$SCRIPT_DIR" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$SCRIPT_DIR" -name "*.pyc" -delete 2>/dev/null || true
+    
+    # Remove logs (keep recent)
+    find "$SCRIPT_DIR" -name "*.log" -mtime +7 -delete 2>/dev/null || true
+    
+    # Remove temp databases
+    find "$SCRIPT_DIR" -name "*.db-journal" -delete 2>/dev/null || true
+    
+    print_success "Cleanup completed"
+}
+
+# Main command dispatcher
+main() {
+    # Check requirements first
+    check_requirements
+    
+    # Activate virtual environment if available
+    activate_venv
+    
+    local command="$1"
+    shift 2>/dev/null || true
+    
+    case "$command" in
+        "run")
+            run_task "$@"
+            ;;
+        "test")
+            run_tests "$@"
+            ;;
+        "config")
+            manage_config "$@"
+            ;;
+        "status")
+            show_status "$@"
+            ;;
+        "models")
+            manage_models "$@"
+            ;;
+        "roles")
+            manage_roles "$@"
+            ;;
+        "dashboard")
+            print_info "Starting dashboard..."
+            PYTHONPATH="$SCRIPT_DIR" python3 "$PYTHON_MAIN" --dashboard "$@"
+            ;;
+        "monitor")
+            print_info "Starting system monitor..."
+            PYTHONPATH="$SCRIPT_DIR" python3 "$PYTHON_MAIN" --monitor "$@"
+            ;;
+        "doctor")
+            system_doctor "$@"
+            ;;
+        "install")
+            install_deps "$@"
+            ;;
+        "clean")
+            clean_files "$@"
+            ;;
+        "version")
+            echo "Ollama Flow Enhanced CLI v2.0"
+            echo "Unified Agent System with Advanced Capabilities"
+            echo "Python: $(python3 --version)"
+            echo "Directory: $SCRIPT_DIR"
+            ;;
+        "help"|"--help"|"-h"|"")
+            show_help
+            ;;
+        *)
+            print_error "Unknown command: $command"
+            echo "Run 'ollama-flow-enhanced help' for usage information"
+            exit 1
+            ;;
+    esac
+}
+
+# Error handling
+trap 'print_error "Command failed! Check the error messages above."; exit 1' ERR
+
+# Run main function
+main "$@"

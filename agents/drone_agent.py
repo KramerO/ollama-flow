@@ -5,6 +5,7 @@ from typing import Optional, Any, List
 import re
 import os
 from enum import Enum
+import logging
 
 from agents.base_agent import BaseAgent, AgentMessage
 
@@ -16,43 +17,90 @@ except ImportError:
     ENHANCED_CODEGEN_AVAILABLE = False
     print("⚠️ Enhanced code generator not available, using fallback")
 
+# Import LLM Chooser
+try:
+    from llm_chooser import get_llm_chooser, choose_model_for_role
+    LLM_CHOOSER_AVAILABLE = True
+except ImportError:
+    LLM_CHOOSER_AVAILABLE = False
+    print("⚠️ LLM Chooser not available, using default models")
+
+logger = logging.getLogger(__name__)
+
 class DroneRole(Enum):
     """Different roles a drone can take"""
     ANALYST = "analyst"
     DATA_SCIENTIST = "datascientist"
     IT_ARCHITECT = "it_architect"
     DEVELOPER = "developer"
+    SECURITY_SPECIALIST = "security_specialist"
 
 class DroneAgent(BaseAgent):
-    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = DroneRole.DEVELOPER):
+    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = None):
         super().__init__(agent_id, name)
-        self.model = model
+        self.model = model  # Fallback model
         self.project_folder_path = project_folder_path
-        self.role = role
-        self.capabilities = self._get_role_capabilities()
+        self.role = role  # Now defaults to None for dynamic assignment
+        self.capabilities = self._get_role_capabilities() if role else []
+        
+        # Initialize LLM Chooser for dynamic model selection
+        self.llm_chooser = None
+        if LLM_CHOOSER_AVAILABLE:
+            try:
+                self.llm_chooser = get_llm_chooser()
+                role_name = self.role.value if self.role else "dynamic"
+                logger.info(f"✅ LLM Chooser initialized for {self.name} ({role_name})")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize LLM Chooser: {e}")
         
         # Initialize enhanced code generator if available
         self.code_generator = None
         if ENHANCED_CODEGEN_AVAILABLE:
             try:
                 self.code_generator = create_code_generator()
-                print(f"✅ Enhanced code generator initialized for {self.name}")
+                logger.info(f"✅ Enhanced code generator initialized for {self.name}")
             except Exception as e:
-                print(f"⚠️ Failed to initialize enhanced code generator: {e}")
+                logger.warning(f"⚠️ Failed to initialize enhanced code generator: {e}")
 
     async def _perform_task(self, prompt: str) -> str:
         try:
+            # Ensure role is assigned before task execution
+            if not self.role:
+                print(f"⚠️ [DroneAgent {self.name}] No role assigned, using DEVELOPER as fallback")
+                self.role = DroneRole.DEVELOPER
+                self.capabilities = self._get_role_capabilities()
+            
+            # Wähle optimales LLM basierend auf Rolle und Task
+            selected_model = self._choose_optimal_model(prompt)
+            
+            role_name = self.role.value if self.role else "dynamic"
+            logger.info(f"🎯 {self.name} ({role_name}) uses model: {selected_model}")
+            
             response = ollama.chat(
-                model=self.model,
+                model=selected_model,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return response["message"]["content"]
+            
+            # Post-processing basierend auf Rolle
+            result = response["message"]["content"]
+            if self.role == DroneRole.SECURITY_SPECIALIST:
+                result = self._add_security_recommendations(result, prompt)
+            
+            # Extract and execute commands from LLM response
+            execution_result = await self._extract_and_execute_commands(result)
+            if execution_result:
+                result += f"\n\n=== COMMAND EXECUTION RESULTS ===\n{execution_result}"
+                
+            return result
+            
         except Exception as e:
-            print(f"Error performing task: {e}")
+            logger.error(f"❌ Task execution failed for {self.name}: {e}")
+            print(f"❌ Error in agent {self.name} ({self.agent_id}) polling task: {e}")
             raise
 
     async def _run_command(self, command: str) -> str:
-        print(f"[DroneAgent {self.name} ({self.role.value})] Executing command: {command}")
+        role_name = self.role.value if self.role else "dynamic"
+        print(f"[DroneAgent {self.name} ({role_name})] Executing command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -69,6 +117,36 @@ class DroneAgent(BaseAgent):
         if process.returncode != 0:
             output += f"Error: Command exited with code {process.returncode}\n"
         return output.strip()
+
+    async def _extract_and_execute_commands(self, llm_response: str) -> str:
+        """Extract shell commands from LLM response and execute them"""
+        import re
+        
+        # Patterns to match shell commands in LLM responses
+        command_patterns = [
+            r'```bash\n(.*?)\n```',
+            r'```shell\n(.*?)\n```', 
+            r'```\n\$\s*(.*?)\n```',
+            r'\$\s*(echo|cat|pip|python|touch|mkdir|ls).*',
+            r'(echo|cat|pip)\s+.*?(?=\n|$)',
+            r'cat\s+<<\s*[\'"]?EOF[\'"]?\s*>\s*[\w\.]+.*?EOF',
+        ]
+        
+        commands_executed = []
+        
+        for pattern in command_patterns:
+            matches = re.findall(pattern, llm_response, re.MULTILINE | re.DOTALL)
+            for match in matches:
+                command = match.strip()
+                if command and not command.startswith('#'):
+                    try:
+                        print(f"[DroneAgent {self.name}] Executing extracted command: {command}")
+                        result = await self._run_command(command)
+                        commands_executed.append(f"Command: {command}\nResult: {result}")
+                    except Exception as e:
+                        commands_executed.append(f"Command: {command}\nError: {str(e)}")
+        
+        return "\n\n".join(commands_executed) if commands_executed else ""
 
     async def _handle_file_saving(self, message_content: str, result: str) -> str:
         save_message = ""
@@ -175,33 +253,103 @@ class DroneAgent(BaseAgent):
             command_output = await self._run_command(command_to_execute)
         return command_output
 
-    async def _analyze_and_execute_task(self, task: str) -> str:
-        """Analyze task and decide whether to use LLM or direct command execution"""
-        # Enhanced command execution prompts for better AI understanding
-        enhanced_prompt = f"""
-You are an AI assistant with command-line access. Analyze this task and provide the most efficient solution:
-
-Task: {task}
-
-You have the following capabilities:
-1. Create files using standard commands (echo, cat, touch, etc.)
-2. Execute Python scripts and install packages
-3. Use any command-line tools available on the system
-4. Generate code and save it to files
-
-For this task, please:
-1. First, analyze what needs to be done
-2. Then provide the specific commands to execute
-3. If code generation is needed, create the code and save it to the appropriate file
-
-Be practical and use command-line tools effectively. Respond with clear steps and commands.
-"""
+    def assign_dynamic_role(self, task: str) -> DroneRole:
+        """Dynamically assign role based on task analysis"""
+        task_lower = task.lower()
         
-        # Get AI response with enhanced prompt
+        # Keywords that suggest specific roles
+        role_keywords = {
+            DroneRole.DATA_SCIENTIST: [
+                'machine learning', 'ml', 'model', 'train', 'predict', 'dataset',
+                'pandas', 'numpy', 'scikit', 'tensorflow', 'pytorch', 'analysis',
+                'statistics', 'correlation', 'regression', 'classification',
+                'opencv', 'cv2', 'image recognition', 'computer vision', 'bildverarbeitung',
+                'bilderkennungs', 'bilderkennung', 'image processing', 'drone perspective',
+                'pattern recognition', 'feature detection', 'object detection'
+            ],
+            DroneRole.ANALYST: [
+                'analyze', 'report', 'document', 'review', 'assess', 'evaluate',
+                'metrics', 'dashboard', 'visualization', 'chart', 'graph',
+                'insights', 'trends', 'patterns', 'summary', 'daten', 'data'
+            ],
+            DroneRole.IT_ARCHITECT: [
+                'architecture', 'design', 'system', 'infrastructure', 'scalability',
+                'microservices', 'api', 'database', 'security', 'deployment',
+                'cloud', 'docker', 'kubernetes', 'projekt', 'project structure'
+            ],
+            DroneRole.DEVELOPER: [
+                'code', 'develop', 'implement', 'build', 'create', 'program',
+                'function', 'class', 'script', 'application', 'web', 'frontend',
+                'backend', 'debug', 'test', 'fix', 'python', 'erstelle', 'baust'
+            ],
+            DroneRole.SECURITY_SPECIALIST: [
+                'security', 'secure', 'vulnerability', 'audit', 'penetration', 'encrypt',
+                'authenticate', 'authorize', 'compliance', 'threat', 'attack', 'defense',
+                'owasp', 'csrf', 'xss', 'injection', 'authentication', 'authorization',
+                'ssl', 'tls', 'firewall', 'intrusion', 'malware', 'breach', 'privacy',
+                'sicherheit', 'verschlüsselung', 'angriff', 'schutz', 'bedrohung',
+                'risks', 'risk assessment', 'cyber', 'cybersecurity', 'hacking', 'exploit'
+            ]
+        }
+        
+        # Score each role based on keyword matches
+        role_scores = {}
+        for role, keywords in role_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in task_lower)
+            role_scores[role] = score
+            
+        # Return role with highest score, default to DEVELOPER
+        best_role = max(role_scores.items(), key=lambda x: x[1])
+        assigned_role = best_role[0] if best_role[1] > 0 else DroneRole.DEVELOPER
+        
+        # Update drone's role and capabilities
+        old_role = self.role.value if self.role else "None"
+        self.role = assigned_role
+        self.capabilities = self._get_role_capabilities()
+        
+        print(f"🎭 [DroneAgent {self.name}] Dynamic role assignment: {old_role} -> {assigned_role.value}")
+        print(f"🎯 [DroneAgent {self.name}] Now specialized as: {assigned_role.value.upper()}")
+        print(f"💪 [DroneAgent {self.name}] Capabilities: {', '.join(self.capabilities)}")
+        
+        # Update role monitor if available
+        try:
+            import role_monitor
+            role_monitor.update_role(
+                self.agent_id, 
+                self.name, 
+                old_role, 
+                assigned_role.value, 
+                task[:100]  # First 100 chars of task
+            )
+        except ImportError:
+            pass  # Role monitor not available
+            
+        return assigned_role
+
+    async def _analyze_and_execute_task(self, task: str) -> str:
+        """Analyze task, assign dynamic role, and execute with role-specific context"""
+        # CRITICAL: Ensure role is assigned before any task processing
+        if not self.role:
+            try:
+                assigned_role = self.assign_dynamic_role(task)
+                print(f"✅ [DroneAgent {self.name}] Role successfully assigned: {assigned_role.value}")
+            except Exception as e:
+                print(f"❌ [DroneAgent {self.name}] Role assignment failed: {e}")
+                # Set default role to prevent NoneType errors
+                self.role = DroneRole.DEVELOPER
+                self.capabilities = self._get_role_capabilities()
+                print(f"🔄 [DroneAgent {self.name}] Fallback to DEVELOPER role")
+        
+        # Get role-specific enhanced prompt
+        enhanced_prompt = self._enhance_prompt_for_role(task)
+        
+        # Get AI response with role-specific enhanced prompt
         result = await self._perform_task(enhanced_prompt)
         
         # Parse and execute any commands found in the response
-        await self._parse_and_execute_commands(result)
+        command_output = await self._parse_and_execute_commands(result)
+        if command_output:
+            result += f"\n\n=== COMMAND EXECUTION RESULTS ===\n{command_output}"
         
         # Extract and save any Python code found in the response using enhanced generator
         if "python" in task.lower() or ".py" in task.lower() or "opencv" in task.lower():
@@ -277,33 +425,393 @@ Be practical and use command-line tools effectively. Respond with clear steps an
             DroneRole.DEVELOPER: [
                 "coding", "debugging", "testing", "deployment",
                 "version_control", "code_review", "problem_solving"
+            ],
+            DroneRole.SECURITY_SPECIALIST: [
+                "security_audit", "vulnerability_assessment", "penetration_testing",
+                "secure_coding", "threat_modeling", "compliance_check",
+                "encryption_implementation", "authentication_design", "authorization_patterns",
+                "security_architecture_review", "risk_assessment", "incident_response"
             ]
         }
         return capabilities_map.get(self.role, [])
     
+    def _choose_optimal_model(self, task_context: str) -> str:
+        """Wählt das optimale LLM basierend auf Rolle und Task-Kontext"""
+        if self.llm_chooser and self.role:
+            try:
+                optimal_model = self.llm_chooser.choose_model_for_role(
+                    self.role.value, 
+                    task_context
+                )
+                logger.info(f"🎯 Model chosen for {self.role.value}: {optimal_model}")
+                return optimal_model
+            except Exception as e:
+                logger.warning(f"⚠️ LLM selection failed, using fallback: {e}")
+        
+        return self.model  # Fallback to default
+    
+    def _enhance_prompt_for_role(self, prompt: str) -> str:
+        """Erweitert den Prompt um rollenspezifische Kontexte und Anweisungen"""
+        role_context = self._get_role_context()
+        security_context = ""
+        
+        # Spezielle Security-Behandlung
+        if self.role and self.role == DroneRole.SECURITY_SPECIALIST:
+            security_context = self._get_security_context(prompt)
+        
+        enhanced_prompt = f"""{role_context}
+
+TASK: {prompt}
+
+{security_context}
+
+❗ CRITICAL REQUIREMENTS - NO EXCEPTIONS ❗
+1. EXECUTE COMMANDS IMMEDIATELY - Stop describing, start executing
+2. CREATE FILES WITH ACTUAL CODE CONTENT - Never use just 'touch'
+3. EXAMPLE COMMANDS YOU MUST USE:
+   - echo "#!/usr/bin/env python3" > shodan_clone.py
+   - cat << 'EOF' > main_program.py
+   - pip install requests socket-scanner nmap
+4. WRITE COMPLETE FUNCTIONAL CODE - Not empty files or placeholders
+5. VALIDATE IMPLEMENTATION - Run python -c "import module_name"
+
+WORKING DIRECTORY: {self.project_folder_path if self.project_folder_path else '.'}
+
+⚠️ FAILURE CONDITIONS ⚠️
+- If you describe instead of executing → TASK FAILED
+- If you create empty files → TASK FAILED  
+- If you plan without implementing → TASK FAILED
+
+✅ SUCCESS CONDITIONS ✅
+- Files created with working code content
+- Code can be executed without errors
+- All dependencies documented in requirements.txt
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+```bash
+echo "#!/usr/bin/env python3" > shodan_scanner.py
+cat << 'EOF' > shodan_scanner.py
+#!/usr/bin/env python3
+import socket
+import threading
+import requests
+import json
+
+def scan_port(host, port):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+def main():
+    print("Shodan-like scanner starting...")
+    # Add your main logic here
+    
+if __name__ == "__main__":
+    main()
+EOF
+pip install requests
+python shodan_scanner.py
+```
+
+Brief explanation: Created a Shodan-like network scanner.
+
+CRITICAL: Your response MUST contain bash code blocks with actual commands!"""
+        
+        return enhanced_prompt
+    
+    def _get_security_context(self, task: str) -> str:
+        """Erstellt Security-spezifischen Kontext"""
+        security_frameworks = [
+            "OWASP Top 10", "NIST Cybersecurity Framework", "ISO 27001",
+            "SANS Top 25", "CWE (Common Weakness Enumeration)"
+        ]
+        
+        task_lower = task.lower()
+        context_parts = []
+        
+        # Erkenne Security-relevante Keywords
+        if any(keyword in task_lower for keyword in ['web', 'api', 'application', 'app']):
+            context_parts.append("""
+SECURITY FOCUS - Web Application:
+- Apply OWASP Top 10 principles (Injection, Broken Auth, Sensitive Data, XXE, etc.)
+- Implement proper input validation and output encoding
+- Use secure session management and CSRF protection
+- Ensure proper authentication and authorization patterns""")
+        
+        if any(keyword in task_lower for keyword in ['database', 'sql', 'data']):
+            context_parts.append("""
+SECURITY FOCUS - Data Protection:
+- Implement SQL injection prevention (parameterized queries)
+- Use encryption for sensitive data at rest and in transit
+- Apply principle of least privilege for database access
+- Implement proper backup encryption and access controls""")
+        
+        if any(keyword in task_lower for keyword in ['authentication', 'login', 'user']):
+            context_parts.append("""
+SECURITY FOCUS - Authentication & Authorization:
+- Implement multi-factor authentication (MFA)
+- Use secure password policies and hashing (bcrypt, Argon2)
+- Apply JWT security best practices
+- Implement proper session timeout and management""")
+        
+        if any(keyword in task_lower for keyword in ['api', 'rest', 'microservice']):
+            context_parts.append("""
+SECURITY FOCUS - API Security:
+- Implement proper API authentication (OAuth 2.0, JWT)
+- Use rate limiting and throttling
+- Apply input validation and sanitization
+- Implement proper error handling (avoid information disclosure)""")
+        
+        if any(keyword in task_lower for keyword in ['architecture', 'design', 'system']):
+            context_parts.append("""
+SECURITY FOCUS - Architecture Security:
+- Apply defense in depth principles
+- Implement zero-trust architecture concepts
+- Use secure communication protocols (TLS 1.3+)
+- Design with security by default and privacy by design""")
+        
+        # Standard Security-Kontext wenn keine spezifischen Keywords gefunden
+        if not context_parts:
+            context_parts.append("""
+GENERAL SECURITY PRINCIPLES:
+- Follow secure coding practices
+- Apply principle of least privilege
+- Implement proper error handling and logging
+- Use security-focused libraries and frameworks
+- Consider threat modeling and risk assessment""")
+        
+        return "\n".join(context_parts) + f"""
+
+SECURITY FRAMEWORKS TO CONSIDER: {', '.join(security_frameworks[:3])}
+
+ALWAYS INCLUDE:
+1. Specific security vulnerabilities to watch for
+2. Concrete implementation recommendations
+3. Security testing suggestions
+4. Compliance considerations if applicable"""
+    
+    def _add_security_recommendations(self, result: str, original_task: str) -> str:
+        """Fügt Security-Empfehlungen zum Ergebnis hinzu"""
+        security_addendum = f"""
+
+🔒 SECURITY SPECIALIST RECOMMENDATIONS:
+
+IMMEDIATE ACTIONS:
+• Code Review: Scan the above implementation for common vulnerabilities
+• Security Testing: Plan penetration testing and security audits
+• Dependency Check: Verify all dependencies for known vulnerabilities
+• Access Control: Implement proper authentication and authorization
+
+SECURITY CHECKLIST:
+□ Input validation implemented
+□ Output encoding applied
+□ SQL injection prevention in place
+□ XSS protection implemented
+□ CSRF tokens used where applicable
+□ Secure headers configured
+□ Error handling doesn't leak sensitive information
+□ Logging and monitoring configured
+
+NEXT STEPS:
+1. Conduct threat modeling for this implementation
+2. Set up automated security scanning (SAST/DAST)
+3. Plan regular security reviews and updates
+4. Document security architecture decisions
+
+⚠️  SECURITY REMINDER: This analysis is based on the provided context. 
+Always conduct thorough security reviews with qualified security professionals."""
+
+        return result + security_addendum
+    
     def _get_role_context(self) -> str:
         """Get role-specific context for enhanced prompts"""
+        if not self.role:
+            return "🎯 ROLE: DYNAMIC ASSIGNMENT - Analyzing task to determine optimal role"
+            
         role_contexts = {
             DroneRole.ANALYST: """
-You are an ANALYST DRONE specializing in data analysis, reporting, and pattern recognition.
-Your expertise: Statistical analysis, data visualization, report generation, insights discovery.
-When given tasks, focus on analytical approaches and comprehensive documentation.
+🎯 ROLE: ANALYST DRONE - Data Intelligence Specialist
+
+CORE EXPERTISE:
+• Advanced statistical analysis and data interpretation
+• Business intelligence and KPI development  
+• Market research and competitive analysis
+• Risk assessment and impact analysis
+• Performance metrics and trend identification
+• Report generation with actionable insights
+
+WORKING STYLE:
+• Data-driven decision making approach
+• Systematic analysis with clear methodology
+• Focus on patterns, anomalies, and correlations  
+• Evidence-based recommendations
+• Clear visualization of complex information
+
+OUTPUT FORMAT:
+1. Executive Summary (key findings)
+2. Detailed Analysis (methodology & findings)
+3. Visual Data Representation (when applicable)
+4. Risk Assessment & Mitigation
+5. Actionable Recommendations
+6. Implementation Timeline
+
+COLLABORATION: Share insights with architects for system optimization, work with developers on data integration requirements.
 """,
             DroneRole.DATA_SCIENTIST: """
-You are a DATA SCIENTIST DRONE specializing in machine learning and data science.
-Your expertise: OpenCV, computer vision, ML models, data preprocessing, statistical modeling.
-When given coding tasks, write complete, functional Python code with proper imports and error handling.
-For OpenCV tasks, create comprehensive image processing and recognition systems.
+🎯 ROLE: DATA SCIENTIST DRONE - ML/AI Implementation Specialist  
+
+CORE EXPERTISE:
+• Machine Learning model design, training & optimization
+• Computer Vision with OpenCV, TensorFlow, PyTorch
+• Deep Learning architectures (CNN, RNN, Transformers)
+• Statistical modeling and feature engineering
+• Data pipeline architecture and ETL processes
+• MLOps and model deployment strategies
+
+EXECUTION COMMANDS YOU MUST USE:
+• echo "import pandas as pd" > data_analysis.py (create Python files)
+• pip install pandas numpy scikit-learn requests (install ML packages)
+• python -c "import numpy; print('NumPy works')" (test installations)
+• cat << 'EOF' > model.py (create multi-line ML code)
+• mkdir data/ models/ (create project structure)
+
+TECHNICAL STANDARDS:
+• ALWAYS create working Python files with real ML code
+• Include proper imports: pandas, numpy, requests, socket, etc.
+• Create functional data collection and analysis scripts
+• Add error handling and logging
+• Generate requirements.txt with all dependencies
+
+CRITICAL: You MUST create actual Python files with working code. No planning, only implementation.
 """,
             DroneRole.IT_ARCHITECT: """
-You are an IT ARCHITECT DRONE specializing in system design and infrastructure.
-Your expertise: System architecture, scalability, security, cloud design, technology selection.
-When given tasks, focus on robust, scalable solutions with proper architecture patterns.
+🎯 ROLE: IT ARCHITECT DRONE - Enterprise System Designer
+
+CORE EXPERTISE:
+• Enterprise architecture patterns and best practices
+• Cloud-native design (AWS, Azure, GCP) 
+• Microservices and distributed systems architecture
+• API design and integration strategies
+• Database architecture and data modeling
+• Infrastructure as Code (IaC) and automation
+• System scalability and performance optimization
+
+WORKING STYLE:
+• Architecture-first approach with clear documentation
+• Technology-agnostic solution design
+• Focus on maintainability, scalability, and reliability  
+• Cost optimization and resource efficiency
+• Future-proof design with evolution pathways
+
+OUTPUT FORMAT:
+1. Architecture Overview & Design Principles
+2. System Components & Service Breakdown
+3. Data Flow & Integration Diagrams
+4. Technology Stack Recommendations
+5. Scalability & Performance Considerations
+6. Security & Compliance Framework
+7. Implementation Roadmap & Milestones
+
+TECHNICAL DELIVERABLES:
+• System architecture diagrams (C4, UML)
+• API specifications (OpenAPI/Swagger)
+• Infrastructure definitions (Terraform, CloudFormation)
+• Database schemas and migration scripts
+
+COLLABORATION: Guide developers on implementation details, align with security specialists on secure design patterns.
 """,
             DroneRole.DEVELOPER: """
-You are a DEVELOPER DRONE specializing in coding and implementation.
-Your expertise: Python programming, debugging, testing, deployment, code optimization.
-When given coding tasks, write complete, functional code with proper structure and documentation.
+🎯 ROLE: DEVELOPER DRONE - Software Implementation Expert
+
+CORE EXPERTISE:
+• Full-stack development (Python, JavaScript, TypeScript)
+• Backend systems (FastAPI, Django, Flask)
+• Frontend frameworks (React, Vue, Angular)
+• Database design and optimization (SQL, NoSQL)
+• DevOps and CI/CD pipeline implementation
+• Test-driven development and quality assurance
+• Version control and collaborative development
+
+WORKING STYLE:
+• Clean code principles with SOLID design patterns
+• Test-first development with comprehensive coverage
+• Performance optimization and code refactoring
+• Documentation-driven development
+• Agile methodologies and iterative delivery
+
+❌ FORBIDDEN COMMANDS:
+• touch filename.py (creates empty files - NEVER USE!)
+• "I will create..." (describing instead of doing - FORBIDDEN!)
+
+✅ REQUIRED COMMANDS - USE THESE IMMEDIATELY:
+• echo "#!/usr/bin/env python3" > shodan_scanner.py
+• cat << 'EOF' > network_scanner.py
+[ACTUAL PYTHON CODE HERE]
+EOF
+• pip install requests nmap python-nmap socket
+• python -c "import requests; print('Working')"
+
+EXAMPLE REAL IMPLEMENTATION:
+echo "import socket, threading, requests" > shodan_clone.py
+cat << 'EOF' >> shodan_clone.py
+def scan_port(ip, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((ip, port))
+    return result == 0
+EOF
+
+⚠️ EXECUTION RULES ⚠️
+1. Write REAL CODE in files - not placeholders
+2. Use cat << 'EOF' for multi-line Python code
+3. Test code with python -c "import module"
+4. Never use touch - always include content
+
+CRITICAL: EXECUTE NOW! Stop planning, start coding!
+""",
+            DroneRole.SECURITY_SPECIALIST: """
+🎯 ROLE: SECURITY SPECIALIST DRONE - Cybersecurity & Compliance Expert
+
+CORE EXPERTISE:
+• Security architecture design and threat modeling
+• Vulnerability assessment and penetration testing
+• Secure coding practices and code review
+• Identity & Access Management (IAM) systems
+• Encryption, PKI, and cryptographic implementations
+• Compliance frameworks (GDPR, SOC2, PCI-DSS, NIST)
+• Incident response and forensic analysis
+• Security automation and SIEM integration
+
+WORKING STYLE:
+• Zero-trust security model implementation
+• Risk-based approach with quantified assessments
+• Defense-in-depth strategy across all layers
+• Continuous security monitoring and improvement
+• Threat intelligence integration
+
+OUTPUT FORMAT:
+1. Threat Model & Risk Assessment
+2. Security Requirements & Controls
+3. Secure Implementation Guidelines
+4. Security Testing & Validation Plan
+5. Incident Response Procedures
+6. Compliance Checklist & Audit Trail
+7. Security Monitoring & Alerting Setup
+
+SECURITY FRAMEWORKS:
+• OWASP Top 10 and security testing methodology
+• NIST Cybersecurity Framework implementation
+• ISO 27001/27002 security controls
+• SANS security architecture principles
+
+COLLABORATION: Review all team outputs for security implications, provide secure design patterns to architects and developers.
+
+SECURITY MINDSET: "Assume breach, verify everything, minimize attack surface, implement defense in depth."
 """
         }
         return role_contexts.get(self.role, "You are a specialized drone agent.")
@@ -440,42 +948,11 @@ As a developer, focus on:
         }
         return role_contexts.get(self.role, f"Task: {task}")
 
-    async def _analyze_and_execute_task(self, task: str) -> str:
-        """Analyze task and decide whether to use LLM or direct command execution with role-specific context"""
-        # Get role-specific enhanced prompt
-        enhanced_prompt = self._get_role_specific_prompt(task)
-        
-        # Add general capabilities context
-        enhanced_prompt += f"""
-
-Your available capabilities: {', '.join(self.capabilities)}
-
-You have the following technical capabilities:
-1. Create files using standard commands (echo, cat, touch, etc.)
-2. Execute Python scripts and install packages
-3. Use any command-line tools available on the system
-4. Generate code and save it to files
-
-For this task, please:
-1. First, analyze what needs to be done from your role perspective
-2. Then provide the specific commands to execute
-3. If code generation is needed, create the code and save it to the appropriate file
-
-Be practical and use command-line tools effectively while leveraging your role expertise.
-"""
-        
-        # Get AI response with role-specific enhanced prompt
-        result = await self._perform_task(enhanced_prompt)
-        
-        # Parse and execute any commands found in the response
-        await self._parse_and_execute_commands(result)
-        
-        return result
 
     def get_role_info(self) -> dict:
         """Get information about drone's role and capabilities"""
         return {
-            "role": self.role.value,
+            "role": self.role.value if self.role else "dynamic",
             "capabilities": self.capabilities,
             "agent_id": self.agent_id,
             "name": self.name
@@ -506,7 +983,8 @@ Be practical and use command-line tools effectively while leveraging your role e
         # Execute found commands
         for command in commands_found:
             if command and not command.startswith('#'):  # Skip comments
-                print(f"[DroneAgent {self.name} ({self.role.value})] Executing AI-suggested command: {command}")
+                role_name = self.role.value if self.role else "dynamic"
+                print(f"[DroneAgent {self.name} ({role_name})] Executing AI-suggested command: {command}")
                 try:
                     cmd_result = await self._run_command(command)
                     command_output += f"\n--- Command: {command} ---\n{cmd_result}\n"
@@ -516,12 +994,15 @@ Be practical and use command-line tools effectively while leveraging your role e
         return command_output
 
     async def receive_message(self, message: AgentMessage):
-        print(f"DroneAgent {self.name} ({self.agent_id}) with role {self.role.value} received message from {message.sender_id}: {message.content}")
+        role_name = self.role.value if self.role else "dynamic"
+        print(f"DroneAgent {self.name} ({self.agent_id}) with role {role_name} received message from {message.sender_id}: {message.content}")
 
         # Use AI analysis and command execution approach
         result = await self._analyze_and_execute_task(message.content)
         
-        print(f"DroneAgent {self.name} ({self.agent_id}) with role {self.role.value} completed task analysis")
+        # Role will be assigned during _analyze_and_execute_task
+        assigned_role = self.role.value if self.role else "dynamic"
+        print(f"DroneAgent {self.name} ({self.agent_id}) with role {assigned_role} completed task analysis")
 
         # Handle file saving and additional command execution
         save_message = await self._handle_file_saving(message.content, result)
@@ -532,7 +1013,8 @@ Be practical and use command-line tools effectively while leveraging your role e
             final_response += f"\nCommand Output:\n{command_output}"
 
         # Add role information to response
-        role_info = f"\n[Completed by {self.role.value} drone: {self.name}]"
+        final_role = self.role.value if self.role else "dynamic"
+        role_info = f"\n[Completed by {final_role} drone: {self.name}]"
         final_response += role_info
         
         await self.send_message(message.sender_id, "response", final_response, message.request_id)

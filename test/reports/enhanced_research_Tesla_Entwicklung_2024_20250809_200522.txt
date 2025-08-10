@@ -1,0 +1,59 @@
+================================================================================
+OLLAMA FLOW ENHANCED RESEARCH REPORT
+================================================================================
+
+Anfrage: Tesla Entwicklung 2024
+Workflow ID: d423e45d-78d5-493b-a09d-54eb07ea1767
+Status: completed
+Vertrauenswert: 0.20/1.0
+Erstellt: 2025-08-09T20:05:17.790240
+
+RECHERCHE-ERGEBNISSE
+----------------------------------------
+
+Drohne 1: researcher_1_enhanced
+Typ: enhanced
+Vertrauen: 0.11
+Social Media Quellen: 11
+  • Instagram: 1 Ergebnisse
+  • News: 10 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 11 Social Media Ergebnissen
+
+Drohne 2: researcher_2_enhanced
+Typ: enhanced
+Vertrauen: 0.11
+Social Media Quellen: 11
+  • Instagram: 1 Ergebnisse
+  • News: 10 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 11 Social Media Ergebnissen
+
+Drohne 3: researcher_3
+Typ: traditional
+Vertrauen: 0.00
+
+FACT-CHECK ERGEBNISSE
+----------------------------------------
+
+Validiert: 0/2
+
+Fact-Check 1: factchecker_1
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+Fact-Check 2: factchecker_2
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+ANALYSE-ERGEBNISSE
+----------------------------------------
+
+Analyse 1: analyst_1
+Vertrauen: 0.00
+
+Analyse 2: analyst_2
+Vertrauen: 0.00
+
+--------------------------------------------------------------------------------
+Erstellt mit Ollama Flow Multi-Role System
+Enhanced Mode: True
+--------------------------------------------------------------------------------
