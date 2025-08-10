@@ -63,16 +63,20 @@ class Orchestrator:
                     request_id = message.request_id if message.request_id else message.sender_id
                     if message.message_type == "final-response":
                         if request_id in self.response_resolvers:
-                            self.response_resolvers[request_id].set_result(message.content)
+                            # Only set result if not already resolved
+                            if not self.response_resolvers[request_id].done():
+                                self.response_resolvers[request_id].set_result(message.content)
                             del self.response_resolvers[request_id]
                         else:
-                            print(f"Warning: No resolver found for request_id {request_id}.")
+                            # This might be a duplicate final-response, just ignore it
+                            print(f"Info: Received duplicate final-response for request_id {request_id}.")
                     elif message.message_type == "final-error":
                         if request_id in self.response_resolvers:
-                            self.response_resolvers[request_id].set_exception(Exception(message.content))
+                            if not self.response_resolvers[request_id].done():
+                                self.response_resolvers[request_id].set_exception(Exception(message.content))
                             del self.response_resolvers[request_id]
                         else:
-                            print(f"Warning: No resolver found for request_id {request_id}.")
+                            print(f"Info: Received duplicate final-error for request_id {request_id}.")
                     
                     self.db_manager.mark_message_as_processed(message.message_id)
             except Exception as e:

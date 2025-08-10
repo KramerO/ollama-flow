@@ -37,6 +37,10 @@ class MessageDBManager:
         self.conn.commit()
 
     def insert_message(self, sender_id: str, receiver_id: str, type: str, content: str, request_id: str = None) -> int:
+        # Ensure connection is active
+        if self.conn is None:
+            self.connect()
+        
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -49,6 +53,10 @@ class MessageDBManager:
         return cursor.lastrowid
 
     def get_pending_messages(self, receiver_id: str) -> List[Dict[str, Any]]:
+        # Ensure connection is active
+        if self.conn is None:
+            self.connect()
+        
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -61,6 +69,10 @@ class MessageDBManager:
         return [dict(row) for row in cursor.fetchall()]
 
     def mark_message_as_processed(self, message_id: int):
+        # Ensure connection is active
+        if self.conn is None:
+            self.connect()
+        
         cursor = self.conn.cursor()
         cursor.execute(
             """
