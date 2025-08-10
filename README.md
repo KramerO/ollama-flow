@@ -79,27 +79,51 @@
 
 ## 🚀 **Schnellstart**
 
-### **Ein-Befehl-Installation (Linux/macOS)**
+### **CLI-Installation (Empfohlen - v2.5.0)**
 ```bash
-# Repository klonen und installieren
+# Repository klonen und CLI installieren
 git clone https://github.com/your-username/ollama-flow.git
 cd ollama-flow
-chmod +x install.sh && ./install.sh
+chmod +x install_cli.sh && ./install_cli.sh
 
-# Sofort starten!
-python3 enhanced_framework.py run "Erstelle Python OpenCV Projekt"
+# CLI system-weit verfügbar machen
+source ~/.bashrc  # oder Terminal neu starten
+
+# Sofort starten mit der neuen CLI!
+ollama-flow run "Erstelle Python Hello World Programm" --drones 2 --model codellama:7b
 ```
 
-### **Erweiterte Installation**
+### **CLI-Befehle (Neu in v2.5.0)**
+```bash
+# Aufgaben ausführen mit intelligenter Modellauswahl
+ollama-flow run "Erstelle Python OpenCV Projekt" --drones 4 --arch HIERARCHICAL
+
+# Verfügbare Modelle und Rollenmappings anzeigen
+ollama-flow models list
+
+# Dashboard starten
+ollama-flow dashboard --port 5000
+
+# System-Version und Features anzeigen
+ollama-flow version
+
+# Vollständige Hilfe
+ollama-flow --help
+```
+
+### **Direkte Framework-Nutzung (Erweitert)**
 ```bash
 # Dependencies installieren
 pip install -r requirements.txt
 
-# Enhanced Framework mit allen Fixes starten
+# Framework direkt ausführen (main.py - stabil)
+python3 main.py --task "Deine Aufgabe hier" --drone-count 4 --architecture-type HIERARCHICAL --ollama-model codellama:7b
+
+# Enhanced Framework (experimentell - kann bei Task-Ausführung hängen)
 python3 enhanced_framework.py run "Deine Aufgabe hier" --drones 4 --arch HIERARCHICAL
 
-# Dashboard starten (mit ASCII-Architektur-Visualisierung)
-python3 dashboard.py --port 5000
+# Dashboard starten
+python3 dashboard/flask_dashboard.py --port 5000
 ```
 
 ## 📊 **Performance-Metriken**
@@ -256,36 +280,47 @@ ollama-flow/
 
 ## 🚀 **Verwendungsbeispiele**
 
-### **1. Web-Entwicklung**
+### **1. Web-Entwicklung (CLI - Empfohlen)**
 ```bash
 # Vollständige Web-Anwendung mit React/Node.js
-python3 enhanced_framework.py run \
+ollama-flow run \
   "Erstelle vollständige E-Commerce-Plattform mit React Frontend, Node.js Backend, MongoDB Datenbank, JWT-Authentifizierung und Stripe-Payment" \
   --drones 8 --arch HIERARCHICAL --model codellama:7b
 ```
 
-### **2. Machine Learning Projekt**
+### **2. Machine Learning Projekt (CLI)**
 ```bash
 # OpenCV Computer Vision Pipeline
-python3 enhanced_framework.py run \
+ollama-flow run \
   "Entwickle OpenCV Bilderkennungssystem mit ML-Pipeline für Objektdetektion, Training mit eigenen Daten und REST-API" \
-  --drones 6 --arch CENTRALIZED --model codellama:13b
+  --drones 6 --arch CENTRALIZED --model codellama:7b
 ```
 
-### **3. DevOps/Infrastructure**
+### **3. DevOps/Infrastructure (CLI)**
 ```bash
 # Docker + Kubernetes Deployment
-python3 enhanced_framework.py run \
+ollama-flow run \
   "Setup Docker-Container mit Kubernetes Deployment, CI/CD Pipeline mit GitHub Actions, Monitoring mit Prometheus" \
-  --drones 4 --arch FULLY_CONNECTED --model llama3
+  --drones 4 --arch FULLY_CONNECTED --model llama3:latest
 ```
 
-### **4. Deutsche Sprachunterstützung**
+### **4. Deutsche Sprachunterstützung (CLI)**
 ```bash
 # Deutschsprachige Aufgaben werden automatisch erkannt und übersetzt
-python3 enhanced_framework.py run \
+ollama-flow run \
   "Erstelle Python FastAPI Server mit PostgreSQL Datenbank und Vue.js Frontend" \
-  --drones 6 --arch HIERARCHICAL
+  --drones 6 --arch HIERARCHICAL --model codellama:7b
+```
+
+### **5. Direkte Framework-Nutzung (Erweitert)**
+```bash
+# Für Entwickler, die direkte Framework-Kontrolle benötigen
+python3 main.py \
+  --task "Entwickle OpenCV Bilderkennungssystem" \
+  --drone-count 4 \
+  --architecture-type HIERARCHICAL \
+  --ollama-model codellama:7b \
+  --project-folder /path/to/project
 ```
 
 ## ⚙️ **Konfiguration**
@@ -297,43 +332,42 @@ python3 enhanced_framework.py run \
 - **OS:** Linux oder macOS
 - **Storage:** 5GB für Framework + Modell-Speicher
 
-### **Architektur-Auswahl:**
+### **CLI-Parameter (ollama-flow):**
 ```bash
-# Hierarchical (Standard) - Beste Balance für komplexe Projekte  
---arch HIERARCHICAL
+# Architektur-Auswahl
+--arch HIERARCHICAL      # Beste Balance für komplexe Projekte (Standard)
+--arch CENTRALIZED       # Optimal für sequenzielle Aufgaben
+--arch FULLY_CONNECTED   # Ideal für kollaborative Projekte
 
-# Centralized - Optimal für sequenzielle Aufgaben
---arch CENTRALIZED  
+# Modell-Auswahl (nur verfügbare Modelle verwenden!)
+--model codellama:7b     # Empfohlen für Coding-Aufgaben, 8GB RAM
+--model llama3:latest    # Vielseitig für allgemeine Aufgaben, 8GB RAM
 
-# Fully Connected - Ideal für kollaborative Projekte
---arch FULLY_CONNECTED
+# Drone-Anzahl (CLI verwendet --drones)
+--drones 2              # Schnelle Tests
+--drones 4              # Standard für die meisten Aufgaben  
+--drones 6-8            # Komplexe Projekte (mehr RAM benötigt)
 ```
 
-### **Modell-Empfehlungen:**
+### **Framework-Parameter (main.py/enhanced_framework.py):**
 ```bash
-# Coding-Aufgaben (Empfohlen)
---model codellama:7b     # Ausgewogen, 8GB RAM
-
-# Große Projekte
---model codellama:13b    # Höhere Qualität, 16GB RAM
-
-# Allgemeine Aufgaben  
---model llama3           # Vielseitig, 8GB RAM
-
-# Mini-Modell für Tests
---model phi3:mini        # Sehr schnell, 4GB RAM
+# Direkte Framework-Nutzung (andere Parameter-Namen!)
+--drone-count 4                    # Anzahl Dronen (statt --workers)
+--architecture-type HIERARCHICAL   # Architektur (statt --arch)
+--ollama-model codellama:7b        # Modell (statt --model)
+--project-folder /path/to/project  # Arbeitsverzeichnis
 ```
 
 ### **Performance-Tuning:**
 ```bash
-# Optimal für die meisten Aufgaben
---drones 4 --arch HIERARCHICAL --model codellama:7b
+# CLI - Optimal für die meisten Aufgaben
+ollama-flow run "Task" --drones 4 --arch HIERARCHICAL --model codellama:7b
 
-# Maximale Performance für große Projekte
---drones 8 --arch HIERARCHICAL --model codellama:13b
+# CLI - Schnelle Tests
+ollama-flow run "Task" --drones 2 --arch CENTRALIZED --model llama3:latest
 
-# Schnelle Tests und Prototyping
---drones 2 --arch CENTRALIZED --model phi3:mini
+# Framework direkt - Maximale Kontrolle
+python3 main.py --task "Task" --drone-count 6 --architecture-type HIERARCHICAL --ollama-model codellama:7b
 ```
 
 ## 🧪 **Testing**
@@ -366,31 +400,56 @@ python3 test_ascii_architecture.py
 
 ### **Häufige Probleme und Lösungen:**
 
-#### **1. Datenbank-Verbindungsfehler:**
+#### **1. CLI Parameter-Mapping (BEHOBEN in v2.5.0):**
+```bash
+# ✅ Problem behoben: Parameter-Inkompatibilität zwischen CLI und Framework
+# Die CLI verwendet jetzt konsistent die Drone-Terminologie:
+# --drones → --drone-count (main.py)
+# --model → --ollama-model  
+# --arch → --architecture-type
+```
+
+#### **2. Task-Ausführung hängt (Bekanntes Problem):**
+```bash
+# ⚠️ Enhanced Framework kann bei Task-Ausführung hängen
+# Lösung: Verwende das stabile main.py über die CLI
+ollama-flow run "Task" --drones 2 --model codellama:7b
+
+# Oder direkt:
+python3 main.py --task "Task" --drone-count 2 --ollama-model codellama:7b
+```
+
+#### **3. Modell nicht verfügbar (404 Fehler):**
+```bash
+# Problem: Model "phi3:mini" not found
+# Lösung: Nur verfügbare Modelle verwenden
+ollama list                           # Verfügbare Modelle prüfen
+ollama-flow models list               # CLI: Modelle und Rollenmappings anzeigen
+ollama-flow run "Task" --drones 2 --model codellama:7b  # Verfügbares Modell verwenden
+```
+
+#### **4. Datenbank-Verbindungsfehler:**
 ```bash
 # Problem: SQLite-Verbindungsfehler
 # Lösung: Enhanced Database Manager verwendet automatischen Fallback
 ✅ Enhanced database manager automatically switches to in-memory mode
 ```
 
-#### **2. JSON-Parsing-Fehler:**
+#### **5. JSON-Parsing-Fehler:**
 ```bash
 # Problem: Malformed JSON from LLM
 # Lösung: Multi-Strategy Parser mit 4 Fallback-Ebenen
 ✅ Enhanced parser successfully extracted N subtasks using strategy 2
 ```
 
-#### **3. Code-Generierungsfehler:**
-```bash
-# Problem: cv20.GaussianBlur() typos, Mixed Bash/Python
-# Lösung: Automatische Code-Korrektur
-✅ Code generator auto-corrected 3 syntax errors
-```
-
 ### **Debug-Modus:**
 ```bash
-# Detaillierte Logs für Debugging
-python3 enhanced_framework.py run "Debug Task" --debug --log-level DEBUG
+# CLI - System-Informationen
+ollama-flow version                   # Version und Features anzeigen
+ollama-flow models list               # Verfügbare Modelle prüfen
+
+# Framework direkt - Detaillierte Logs
+python3 main.py --task "Debug Task" --drone-count 2 --ollama-model codellama:7b
 
 # System-Status prüfen
 python3 -c "
@@ -521,24 +580,38 @@ MIT License - Kurz gesagt:
 **Bereit, AI-Agenten zu orchestrieren? Starte jetzt mit Ollama Flow!**
 
 ```bash
-# 🎯 Ein Befehl - Vollständiges Setup (Linux/macOS):
-git clone https://github.com/your-username/ollama-flow.git && cd ollama-flow && python3 enhanced_framework.py run "Hallo Welt Projekt" --drones 2
+# 🎯 Ein Befehl - CLI Installation und Test (Linux/macOS):
+git clone https://github.com/your-username/ollama-flow.git && cd ollama-flow && chmod +x install_cli.sh && ./install_cli.sh && source ~/.bashrc && ollama-flow run "Erstelle Hello World Python Programm" --drones 2
 
 # 📊 Dashboard mit ASCII-Architektur starten:
-python3 dashboard/flask_dashboard.py --port 5000
+ollama-flow dashboard --port 5000
 # Dann besuche: http://localhost:5000
 
-# 🧪 System testen:
-python3 test_ascii_architecture.py
+# 🤖 Verfügbare Modelle und CLI-Features testen:
+ollama-flow models list
+ollama-flow version
 ```
 
 ### **💡 Erste Schritte Empfehlungen:**
 
-1. **🚀 Schnellstart:** Beginne mit einem einfachen Projekt (`--drones 2`)
-2. **📊 Dashboard:** Starte das Dashboard um die Architektur zu visualisieren  
-3. **🧪 Experimentieren:** Teste verschiedene Architekturen und Dronen-Anzahlen
-4. **📖 Lernen:** Schaue dir die generierten Logs an um das System zu verstehen
-5. **🤝 Community:** Teile deine Erfahrungen und hole dir Hilfe bei Issues
+1. **🚀 CLI-Installation:** Verwende die neue CLI für einfachste Bedienung (`ollama-flow`)
+2. **🧪 Einfacher Start:** Beginne mit wenigen Drones (`--drones 2`) und verfügbaren Modellen
+3. **📊 Dashboard:** Starte das Dashboard um die Architektur zu visualisieren  
+4. **🔍 Modelle prüfen:** Verwende `ollama-flow models list` um verfügbare Modelle zu sehen
+5. **⚠️ Bekannte Probleme:** Enhanced Framework kann hängen - verwende main.py über die CLI
+6. **🤝 Community:** Teile deine Erfahrungen und hole dir Hilfe bei Issues
+
+### **⚡ Quick Commands für Einsteiger:**
+```bash
+# Einfachster Test (CLI):
+ollama-flow run "Hello World Python program erstellen" --drones 1 --model llama3:latest
+
+# Komplexeres Projekt (CLI):  
+ollama-flow run "REST API mit FastAPI erstellen" --drones 4 --arch HIERARCHICAL --model codellama:7b
+
+# System-Informationen:
+ollama-flow version && ollama-flow models list
+```
 
 ---
 

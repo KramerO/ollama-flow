@@ -18,9 +18,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 def print_banner():
     """Print the Ollama Flow banner"""
     print("""
-🚀 OLLAMA FLOW - Multi-AI Agent Orchestration Framework
-========================================================
-Enhanced with Neural Intelligence, MCP Tools, Monitoring & Sessions
+🚀 OLLAMA FLOW v2.5.0 - Multi-AI Agent Orchestration Framework
+================================================================
+Enhanced with LLM Chooser, Drone Architecture, Security Specialist & Auto Model Download
     """)
 
 def print_help():
@@ -29,6 +29,7 @@ def print_help():
     print("""
 COMMANDS:
   run <task>              Execute a task with AI agents
+  models                 LLM model management and configuration
   dashboard              Launch web dashboard
   cli-dash               Launch CLI dashboard  
   sessions               Manage sessions
@@ -40,23 +41,39 @@ COMMANDS:
   version                Show version information
 
 EXAMPLES:
-  ollama-flow run "Build a web scraper for news"
-  ollama-flow run "Create REST API with auth" --workers 8 --arch HIERARCHICAL
+  # Automatic model selection (NEW in v2.5.0!)
+  ollama-flow run "Build a secure web scraper"              # Auto: Security + Developer
+  ollama-flow run "Create REST API with JWT auth"          # Auto: Developer + Security
+  ollama-flow run "Analyze this code for vulnerabilities"  # Auto: Security Specialist
+  ollama-flow run "Design microservices architecture"      # Auto: IT Architect
+  ollama-flow run "Create ML model for image recognition"  # Auto: Data Scientist
+  
+  # Model configuration
+  ollama-flow models list                                   # Show available models
+  ollama-flow models config developer:codellama:7b        # Set role-specific model
+  
+  # Traditional options
   ollama-flow dashboard --port 8080
   ollama-flow sessions list
   ollama-flow neural patterns
   ollama-flow monitoring status
-  ollama-flow cleanup
   
 RUN OPTIONS:
-  --workers N            Number of worker agents (default: 4)
-  --arch TYPE            Architecture: HIERARCHICAL, CENTRALIZED, FULLY_CONNECTED
-  --model NAME           Ollama model (default: codellama:7b)
+  --drones N             Number of drone agents (default: 4)
+  --arch TYPE            Architecture: HIERARCHICAL, CENTRALIZED, FULLY_CONNECTED  
+  --model NAME           Ollama model ("auto" = intelligent selection, default)
   --secure               Enable secure mode (default: true)
   --project-folder PATH  Working directory for agents
   --interactive          Interactive mode
   --metrics              Enable performance metrics
   --benchmark            Benchmark mode
+
+🆕 NEW v2.5.0 FEATURES:
+  • Auto Model Selection: Uses best model for each drone role
+  • Security Specialist: Dedicated security analysis drone
+  • Auto Downloads: Missing models downloaded automatically
+  • Enhanced Code Generation: Better code quality and validation
+  • Role-based Intelligence: 5 specialized drone types
 
 DASHBOARD OPTIONS:
   --host HOST            Dashboard host (default: 127.0.0.1)
@@ -76,6 +93,12 @@ NEURAL OPTIONS (for 'neural' command):
   train                  Manual training trigger
   export                 Export patterns to file
 
+MODELS OPTIONS (for 'models' command):
+  list                   List available models and role mappings
+  show                   Show current LLM chooser configuration
+  config <role:model>    Configure model for specific role
+  reset                  Reset configuration to defaults
+
 MONITORING OPTIONS (for 'monitoring' command):
   status                 Show system status
   alerts                 Show active alerts
@@ -87,38 +110,78 @@ For detailed help on any command: ollama-flow <command> --help
 
 def run_enhanced_main(args):
     """Run the enhanced main framework"""
-    # Always use absolute path to enhanced_main.py
-    enhanced_main_path = Path(__file__).parent.absolute() / "enhanced_main.py"
-    cmd = [sys.executable, str(enhanced_main_path)]
+    # Get the real path of the script (resolve symlinks)
+    script_real_path = Path(__file__).resolve()
+    script_dir = script_real_path.parent
     
-    # Add arguments
-    if args.task:
-        cmd.extend(["--task", args.task])
-    if args.workers:
-        cmd.extend(["--workers", str(args.workers)])
-    if args.arch:
-        cmd.extend(["--arch", args.arch])
-    if args.model:
-        cmd.extend(["--model", args.model])
-    if args.secure:
-        cmd.append("--secure")
-    
-    # Use current working directory if no project folder specified
-    if args.project_folder:
-        cmd.extend(["--project-folder", args.project_folder])
+    # If this is a symlink (installed version), find the original directory
+    if script_real_path != Path(__file__):
+        # This is a symlink, use the original directory
+        original_dir = script_real_path.parent
     else:
-        current_dir = os.getcwd()
-        cmd.extend(["--project-folder", current_dir])
-        print(f"🔍 Using current directory: {current_dir}")
+        original_dir = script_dir
     
-    if args.interactive:
-        cmd.append("--interactive")
-    if args.metrics:
-        cmd.append("--metrics")
-    if args.benchmark:
-        cmd.append("--benchmark")
-    if args.log_level:
-        cmd.extend(["--log-level", args.log_level])
+    # Use enhanced_framework.py which has the latest LLM Chooser integration
+    enhanced_framework_path = original_dir / "enhanced_framework.py"
+    
+    # Use main.py as primary choice since enhanced_framework has issues
+    main_path = original_dir / "main.py"
+    if main_path.exists():
+        cmd = [sys.executable, str(main_path)]
+        use_enhanced_framework = False
+    else:
+        # Try enhanced_main.py
+        enhanced_main_path = original_dir / "enhanced_main.py"
+        if enhanced_main_path.exists():
+            cmd = [sys.executable, str(enhanced_main_path)]
+            use_enhanced_framework = False
+        else:
+            # Last resort: enhanced_framework.py (has issues)
+            if enhanced_framework_path.exists():
+                cmd = [sys.executable, str(enhanced_framework_path)]
+                use_enhanced_framework = True
+            else:
+                print("❌ No framework file found. Please check your installation.")
+                sys.exit(1)
+    
+    # Add arguments based on which framework is available
+    if use_enhanced_framework:
+        # Enhanced framework parameters
+        cmd.append("run")  # Command for enhanced_framework.py
+        if args.task:
+            cmd.append(args.task)  # Task is positional argument
+        if args.project_folder:
+            cmd.extend(["--project-folder", args.project_folder])
+        else:
+            current_dir = os.getcwd()
+            cmd.extend(["--project-folder", current_dir])
+            print(f"🔍 Using current directory: {current_dir}")
+        if args.model and args.model != "auto":
+            cmd.extend(["--model", args.model])
+        if args.drones:
+            cmd.extend(["--drones", str(args.drones)])  # Enhanced framework uses --drones
+        if args.arch:
+            cmd.extend(["--arch", args.arch])
+        if not args.interactive:  # Enhanced framework has auto-shutdown by default
+            cmd.append("--no-auto-shutdown")
+    else:
+        # Legacy main.py parameters - map CLI args to main.py expected parameters
+        if args.task:
+            cmd.extend(["--task", args.task])
+        if args.drones:
+            cmd.extend(["--drone-count", str(args.drones)])  # main.py expects --drone-count
+        if args.arch:
+            cmd.extend(["--architecture-type", args.arch])  # main.py expects --architecture-type
+        if args.model and args.model != "auto":
+            cmd.extend(["--ollama-model", args.model])  # main.py expects --ollama-model
+        # Note: main.py doesn't support --secure, --log-level, --interactive, --metrics, --benchmark
+        
+        if args.project_folder:
+            cmd.extend(["--project-folder", args.project_folder])
+        else:
+            current_dir = os.getcwd()
+            cmd.extend(["--project-folder", current_dir])
+            print(f"🔍 Using current directory: {current_dir}")
     
     try:
         subprocess.run(cmd, check=True)
@@ -328,6 +391,85 @@ def neural_operations(args):
     except Exception as e:
         print(f"❌ Neural operation failed: {e}")
 
+def model_operations(args):
+    """Handle LLM model management operations"""
+    try:
+        from llm_chooser import get_llm_chooser
+        
+        def handle_models():
+            try:
+                chooser = get_llm_chooser()
+                
+                if args.models_command == "list":
+                    print("🤖 Available Ollama Models and Role Mappings:")
+                    print("=" * 50)
+                    
+                    # List available models
+                    models = chooser.available_models
+                    if models:
+                        print(f"📋 Available Models ({len(models)}):")
+                        for model in models:
+                            model_info = chooser.get_model_info(model)
+                            strengths = ", ".join(model_info.get('strengths', ['unknown']))
+                            print(f"  • {model} - Strengths: {strengths}")
+                    else:
+                        print("  No models detected. Run 'ollama list' to check your installation.")
+                    
+                    print(f"\n🎯 Role-to-Model Mappings:")
+                    for role, config in chooser.role_model_mapping.items():
+                        primary = config.get('primary', 'none')
+                        fallbacks = config.get('fallback', [])
+                        print(f"  • {role.upper()}: {primary} (fallback: {', '.join(fallbacks)})")
+                
+                elif args.models_command == "show":
+                    print("⚙️  Current LLM Chooser Configuration:")
+                    print("=" * 40)
+                    print(f"Default Model: {chooser.default_model}")
+                    print(f"Config File: {chooser.config_path}")
+                    print(f"Available Models: {len(chooser.available_models)}")
+                    
+                    print(f"\n🎯 Role Mappings:")
+                    for role, config in chooser.role_model_mapping.items():
+                        print(f"  {role}: {config}")
+                
+                elif args.models_command == "config" and hasattr(args, 'role_model') and args.role_model:
+                    # Parse role:model format
+                    if ':' not in args.role_model:
+                        print("❌ Invalid format. Use 'role:model' format (e.g., 'developer:codegemma:7b')")
+                        return
+                    
+                    parts = args.role_model.split(':', 1)
+                    role = parts[0].lower().strip()
+                    model = parts[1].strip()
+                    
+                    # Validate role
+                    valid_roles = ['developer', 'security_specialist', 'it_architect', 'analyst', 'datascientist']
+                    if role not in valid_roles:
+                        print(f"❌ Invalid role '{role}'. Valid roles: {', '.join(valid_roles)}")
+                        return
+                    
+                    # Update role mapping
+                    chooser.update_role_mapping(role, model)
+                    print(f"✅ Updated {role} role to use model: {model}")
+                
+                elif args.models_command == "reset":
+                    print("🔄 Resetting LLM Chooser configuration to defaults...")
+                    chooser._create_default_config()
+                    print("✅ Configuration reset complete!")
+                
+                else:
+                    print("❌ Invalid models command. Use: list, show, config, reset")
+            
+            except ImportError:
+                print("❌ LLM Chooser not available. Make sure llm_chooser.py exists and is working.")
+            except Exception as e:
+                print(f"❌ Models operation failed: {e}")
+        
+        handle_models()
+        
+    except Exception as e:
+        print(f"❌ Model operation failed: {e}")
+
 def monitoring_operations(args):
     """Handle monitoring operations"""
     try:
@@ -515,25 +657,36 @@ For detailed docs: cat README_ENHANCED.md
 def show_version():
     """Show version information"""
     print("""
-🚀 Ollama Flow Framework v2.0.0
+🚀 Ollama Flow Framework v2.5.0
 ===============================
-Enhanced Multi-AI Agent Orchestration
+Enhanced Multi-AI Agent Orchestration with LLM Chooser
 
 COMPONENTS:
-• Core Framework: Enhanced parallel processing
+• Core Framework: Enhanced parallel processing with Drone architecture
+• LLM Chooser: Dynamic model selection based on task and role
 • Neural Intelligence: Pattern learning & optimization
 • MCP Tools: 24+ specialized coordination tools
 • Monitoring System: Real-time performance tracking
 • Session Management: Persistent state & recovery
 • Web Dashboard: Browser-based control interface
 • CLI Dashboard: Terminal-based monitoring
+• Security Specialist: OWASP/NIST compliance integration
 
 CAPABILITIES:
 • 84.8% SWE-Bench solve rate
 • 2.8-4.4x speed improvement
 • 32.3% token reduction
+• Automatic model downloading
+• Role-based AI specialization
 • Enterprise-grade monitoring
 • Production-ready deployment
+
+NEW IN v2.5.0:
+• 🤖 LLM Chooser: Intelligent model selection
+• 🔒 Security Specialist: Dedicated security drone
+• 🚁 Drone Architecture: Replaces worker system
+• ⚡ Auto Model Download: Missing models downloaded automatically
+• 🎯 Role-based Tasks: Developer, Security, Architect, Analyst, Data Scientist
 
 Copyright (c) 2024 Ollama Flow Framework
     """)
@@ -553,10 +706,10 @@ def main():
     # Run command
     run_parser = subparsers.add_parser('run', help='Execute a task with AI agents')
     run_parser.add_argument('task', help='Task description')
-    run_parser.add_argument('--workers', type=int, default=4, help='Number of workers')
+    run_parser.add_argument('--drones', type=int, default=4, help='Number of drone agents')
     run_parser.add_argument('--arch', choices=['HIERARCHICAL', 'CENTRALIZED', 'FULLY_CONNECTED'],
                            default='HIERARCHICAL', help='Architecture type')
-    run_parser.add_argument('--model', default='codellama:7b', help='Ollama model')
+    run_parser.add_argument('--model', default='llama3:latest', help='Ollama model (available: llama3:latest, codellama:7b)')
     run_parser.add_argument('--secure', action='store_true', default=True, help='Secure mode')
     run_parser.add_argument('--project-folder', help='Project folder path')
     run_parser.add_argument('--interactive', action='store_true', help='Interactive mode')
@@ -580,6 +733,12 @@ def main():
     sessions_parser.add_argument('session_command', choices=['list', 'show', 'resume', 'delete', 'cleanup'],
                                 help='Session operation')
     sessions_parser.add_argument('session_id', nargs='?', help='Session ID (for show/resume/delete)')
+    
+    # Models command
+    models_parser = subparsers.add_parser('models', help='LLM model management')
+    models_parser.add_argument('models_command', choices=['list', 'show', 'config', 'reset'],
+                              help='Models operation')
+    models_parser.add_argument('role_model', nargs='?', help='Role:model mapping (for config command, e.g., developer:codegemma:7b)')
     
     # Neural command
     neural_parser = subparsers.add_parser('neural', help='Neural intelligence operations')
@@ -614,6 +773,8 @@ def main():
         run_cli_dashboard(args)
     elif args.command == 'sessions':
         manage_sessions(args)
+    elif args.command == 'models':
+        model_operations(args)
     elif args.command == 'neural':
         neural_operations(args)
     elif args.command == 'monitoring':
