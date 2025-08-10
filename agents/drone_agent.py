@@ -80,6 +80,11 @@ class DroneAgent(BaseAgent):
             result = response["message"]["content"]
             if self.role == DroneRole.SECURITY_SPECIALIST:
                 result = self._add_security_recommendations(result, prompt)
+            
+            # Extract and execute commands from LLM response
+            execution_result = await self._extract_and_execute_commands(result)
+            if execution_result:
+                result += f"\n\n=== COMMAND EXECUTION RESULTS ===\n{execution_result}"
                 
             return result
             
@@ -106,6 +111,36 @@ class DroneAgent(BaseAgent):
         if process.returncode != 0:
             output += f"Error: Command exited with code {process.returncode}\n"
         return output.strip()
+
+    async def _extract_and_execute_commands(self, llm_response: str) -> str:
+        """Extract shell commands from LLM response and execute them"""
+        import re
+        
+        # Patterns to match shell commands in LLM responses
+        command_patterns = [
+            r'```bash\n(.*?)\n```',
+            r'```shell\n(.*?)\n```', 
+            r'```\n\$\s*(.*?)\n```',
+            r'\$\s*(echo|cat|pip|python|touch|mkdir|ls).*',
+            r'(echo|cat|pip)\s+.*?(?=\n|$)',
+            r'cat\s+<<\s*[\'"]?EOF[\'"]?\s*>\s*[\w\.]+.*?EOF',
+        ]
+        
+        commands_executed = []
+        
+        for pattern in command_patterns:
+            matches = re.findall(pattern, llm_response, re.MULTILINE | re.DOTALL)
+            for match in matches:
+                command = match.strip()
+                if command and not command.startswith('#'):
+                    try:
+                        print(f"[DroneAgent {self.name}] Executing extracted command: {command}")
+                        result = await self._run_command(command)
+                        commands_executed.append(f"Command: {command}\nResult: {result}")
+                    except Exception as e:
+                        commands_executed.append(f"Command: {command}\nError: {str(e)}")
+        
+        return "\n\n".join(commands_executed) if commands_executed else ""
 
     async def _handle_file_saving(self, message_content: str, result: str) -> str:
         save_message = ""
@@ -376,7 +411,41 @@ WORKING DIRECTORY: {self.project_folder_path if self.project_folder_path else '.
 - Code can be executed without errors
 - All dependencies documented in requirements.txt
 
-EXECUTE COMMANDS NOW! No more talking, only doing!"""
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+```bash
+echo "#!/usr/bin/env python3" > shodan_scanner.py
+cat << 'EOF' > shodan_scanner.py
+#!/usr/bin/env python3
+import socket
+import threading
+import requests
+import json
+
+def scan_port(host, port):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+def main():
+    print("Shodan-like scanner starting...")
+    # Add your main logic here
+    
+if __name__ == "__main__":
+    main()
+EOF
+pip install requests
+python shodan_scanner.py
+```
+
+Brief explanation: Created a Shodan-like network scanner.
+
+CRITICAL: Your response MUST contain bash code blocks with actual commands!"""
         
         return enhanced_prompt
     
