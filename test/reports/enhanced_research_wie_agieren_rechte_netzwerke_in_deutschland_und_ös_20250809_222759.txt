@@ -1,0 +1,66 @@
+================================================================================
+OLLAMA FLOW ENHANCED RESEARCH REPORT
+================================================================================
+
+Anfrage: wie agieren rechte netzwerke in deutschland und österreich und wie sind die mit der CDU und der alt right bewegung in den USA verbandelt
+Workflow ID: 9c15b043-1fca-4132-a471-3ca37f9a5771
+Status: completed
+Vertrauenswert: 0.25/1.0
+Erstellt: 2025-08-09T22:26:11.763992
+
+RECHERCHE-ERGEBNISSE
+----------------------------------------
+
+Drohne 1: researcher_1_enhanced
+Typ: enhanced
+Vertrauen: 0.41
+Social Media Quellen: 11
+  • Instagram: 1 Ergebnisse
+  • News: 10 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 11 Social Media Ergebnissen
+
+Drohne 2: researcher_2_enhanced
+Typ: enhanced
+Vertrauen: 0.41
+Social Media Quellen: 11
+  • Instagram: 1 Ergebnisse
+  • News: 10 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 11 Social Media Ergebnissen
+
+Drohne 3: researcher_3
+Typ: traditional
+Vertrauen: 0.30
+Fakten:
+  • Recherche zu: Aktuelle Trends und Zukunftsperspektiven zu: wie agieren rechte netzwerke in deutschland und österreich und wie sind die mit der CDU und der alt right bewegung in den USA verbandelt
+  • Wichtige Suchbegriffe: aktuelle, trends, zukunftsperspektiven, agieren, rechte
+  • Hinweis: LLM-basierte Recherche nicht verfügbar, nutze Enhanced Mode für bessere Ergebnisse
+Perspektiven:
+  • Themenbereich: Aktuelle Trends und Zukunftsperspektiven zu: wie agieren rechte netzwerke in deutschland und österreich und wie sind die mit der CDU und der alt right bewegung in den USA verbandelt
+  • Verschiedene Aspekte sollten durch Enhanced Mode abgedeckt werden
+
+FACT-CHECK ERGEBNISSE
+----------------------------------------
+
+Validiert: 0/2
+
+Fact-Check 1: factchecker_1
+Status: ✗ Nicht bestanden
+Bewertung: 3/10
+
+Fact-Check 2: factchecker_2
+Status: ✗ Nicht bestanden
+Bewertung: 3/10
+
+ANALYSE-ERGEBNISSE
+----------------------------------------
+
+Analyse 1: analyst_1
+Vertrauen: 0.00
+
+Analyse 2: analyst_2
+Vertrauen: 0.00
+
+--------------------------------------------------------------------------------
+Erstellt mit Ollama Flow Multi-Role System
+Enhanced Mode: True
+--------------------------------------------------------------------------------

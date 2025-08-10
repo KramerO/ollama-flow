@@ -1,0 +1,489 @@
+#!/bin/bash
+
+# 🚀 Ollama Flow GPU CLI v2.0 - Refactored & Enhanced
+# AMD RX 6650 XT optimiert mit intelligenter GPU-Nutzung
+# Erweiterte Features: Auto-Scaling, Performance Analytics, Real-time Monitoring
+
+set -e
+
+# ===== CONFIGURATION =====
+VERSION="2.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+CONFIG_FILE="$PROJECT_DIR/config_gpu_optimized.json"
+LOG_DIR="$PROJECT_DIR/logs"
+METRICS_FILE="$LOG_DIR/gpu_metrics.json"
+
+# Create directories
+mkdir -p "$LOG_DIR"
+
+# GPU Auto-detection and optimization
+detect_gpu_config() {
+    local gpu_memory=$(radeontop -d - -l 1 2>/dev/null | grep -o 'vram [0-9]*\.[0-9]*%' | head -1 | grep -o '[0-9]*\.[0-9]*' || echo "0")
+    local gpu_usage=$(echo "$gpu_memory" | cut -d'.' -f1)
+    
+    if [ "$gpu_usage" -gt 80 ]; then
+        export OLLAMA_NUM_PARALLEL=6
+        export OLLAMA_MAX_LOADED_MODELS=3
+    elif [ "$gpu_usage" -gt 50 ]; then
+        export OLLAMA_NUM_PARALLEL=8
+        export OLLAMA_MAX_LOADED_MODELS=4
+    else
+        export OLLAMA_NUM_PARALLEL=12
+        export OLLAMA_MAX_LOADED_MODELS=6
+    fi
+}
+
+# Enhanced GPU Environment Setup
+setup_gpu_environment() {
+    # Advanced GPU Optimizations
+    export OLLAMA_GPU_LAYERS=40
+    export OLLAMA_FLASH_ATTENTION=1
+    export OLLAMA_KEEP_ALIVE=15m
+    export OLLAMA_MAX_QUEUE=100
+    export OLLAMA_CONCURRENT_REQUESTS=16
+    
+    # AMD RX 6650 XT Specific
+    export HSA_OVERRIDE_GFX_VERSION=10.3.0
+    export GPU_MAX_HEAP_SIZE=100
+    export GPU_MAX_ALLOC_PERCENT=95
+    export GPU_USE_SYNC_OBJECTS=1
+    export GPU_FORCE_64BIT_PTR=1
+    
+    # OpenCL/Vulkan
+    export OCL_ICD_VENDORS=/usr/lib/x86_64-linux-gnu/OpenCL/vendors
+    export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
+    
+    # Performance Tuning
+    export OMP_NUM_THREADS=$(nproc)
+    export MALLOC_ARENA_MAX=4
+    
+    # Auto-detect optimal settings
+    detect_gpu_config
+}
+
+# Colors and UI
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# Enhanced printing functions
+print_header() {
+    clear
+    echo -e "${BLUE}${BOLD}╔════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}${BOLD}║       🚀 Ollama Flow GPU CLI v$VERSION       ║${NC}"
+    echo -e "${BLUE}${BOLD}║     AMD RX 6650 XT + AI Acceleration  ║${NC}"
+    echo -e "${BLUE}${BOLD}╚════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+print_section() {
+    echo -e "\n${CYAN}${BOLD}▶ $1${NC}"
+    echo -e "${DIM}$(printf '─%.0s' {1..50})${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+print_info() {
+    echo -e "${CYAN}ℹ️  $1${NC}"
+}
+
+print_metric() {
+    local label="$1"
+    local value="$2"
+    local unit="$3"
+    printf "${BOLD}%-20s${NC} ${GREEN}%s${NC} ${DIM}%s${NC}\n" "$label:" "$value" "$unit"
+}
+
+# ===== GPU MONITORING =====
+get_gpu_stats() {
+    if command -v radeontop >/dev/null 2>&1; then
+        local stats=$(timeout 2 radeontop -d - -l 1 2>/dev/null | head -1)
+        if [ -n "$stats" ]; then
+            echo "$stats" | grep -o 'gpu [0-9]*\.[0-9]*%\|vram [0-9]*\.[0-9]*%\|mclk [0-9]*\.[0-9]*%' | tr '\n' ' '
+        else
+            echo "gpu 0.0% vram 0.0% mclk 0.0%"
+        fi
+    else
+        echo "gpu N/A vram N/A mclk N/A"
+    fi
+}
+
+show_gpu_status() {
+    print_section "GPU Status & Configuration"
+    
+    # GPU Hardware Info
+    if lspci | grep -i amd | grep -i vga > /dev/null; then
+        local gpu_name=$(lspci | grep -i amd | grep -i vga | head -1 | cut -d: -f3- | xargs)
+        print_metric "GPU Hardware" "$gpu_name" ""
+    fi
+    
+    # Current GPU Stats
+    local gpu_stats=$(get_gpu_stats)
+    if [ "$gpu_stats" != "gpu N/A vram N/A mclk N/A" ]; then
+        local gpu_usage=$(echo "$gpu_stats" | grep -o 'gpu [0-9]*\.[0-9]*%' | grep -o '[0-9]*\.[0-9]*')
+        local vram_usage=$(echo "$gpu_stats" | grep -o 'vram [0-9]*\.[0-9]*%' | grep -o '[0-9]*\.[0-9]*')
+        local mem_clock=$(echo "$gpu_stats" | grep -o 'mclk [0-9]*\.[0-9]*%' | grep -o '[0-9]*\.[0-9]*')
+        
+        print_metric "GPU Usage" "${gpu_usage}%" ""
+        print_metric "VRAM Usage" "${vram_usage}%" ""
+        print_metric "Memory Clock" "${mem_clock}%" ""
+    else
+        print_warning "GPU Monitoring nicht verfügbar (radeontop installieren)"
+    fi
+    
+    echo ""
+    print_section "Ollama GPU Configuration"
+    print_metric "Parallel Requests" "$OLLAMA_NUM_PARALLEL" "workers"
+    print_metric "GPU Layers" "$OLLAMA_GPU_LAYERS" "layers"
+    print_metric "Max Models" "$OLLAMA_MAX_LOADED_MODELS" "models"
+    print_metric "Keep Alive" "$OLLAMA_KEEP_ALIVE" ""
+    print_metric "Max Queue" "$OLLAMA_MAX_QUEUE" "requests"
+    
+    echo ""
+    print_section "OpenCL & Vulkan Status"
+    
+    # OpenCL Test
+    if command -v clinfo >/dev/null 2>&1; then
+        if clinfo 2>/dev/null | grep -q "Platform Name"; then
+            print_success "OpenCL: Funktional"
+        else
+            print_warning "OpenCL: Installiert aber nicht funktional"
+        fi
+    else
+        print_error "OpenCL: Nicht installiert"
+    fi
+    
+    # Vulkan Test
+    if command -v vulkaninfo >/dev/null 2>&1; then
+        if vulkaninfo --summary 2>/dev/null | grep -q "Vulkan Instance Version"; then
+            print_success "Vulkan: Funktional"
+        else
+            print_warning "Vulkan: Installiert aber nicht funktional"
+        fi
+    else
+        print_error "Vulkan: Nicht installiert"
+    fi
+}
+
+# ===== PERFORMANCE MONITORING =====
+start_performance_monitor() {
+    local duration=${1:-300}  # Default 5 minutes
+    local output_file="$LOG_DIR/performance_$(date +%Y%m%d_%H%M%S).log"
+    
+    print_info "🖥️  Starte Performance Monitoring ($duration Sekunden)..."
+    print_info "Log File: $output_file"
+    
+    {
+        echo "# GPU Performance Log - $(date)"
+        echo "# Timestamp,GPU%,VRAM%,MCLK%,Temperature"
+        
+        for i in $(seq 1 $((duration/2))); do
+            local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+            local stats=$(get_gpu_stats)
+            echo "$timestamp,$stats"
+            sleep 2
+        done
+    } > "$output_file" &
+    
+    local monitor_pid=$!
+    echo "$monitor_pid" > "$LOG_DIR/monitor.pid"
+    
+    print_success "Performance Monitor gestartet (PID: $monitor_pid)"
+    print_info "Stop mit: ./ollama-flow-gpu-v2 stop-monitor"
+}
+
+stop_performance_monitor() {
+    if [ -f "$LOG_DIR/monitor.pid" ]; then
+        local pid=$(cat "$LOG_DIR/monitor.pid")
+        if kill "$pid" 2>/dev/null; then
+            print_success "Performance Monitor gestoppt"
+            rm -f "$LOG_DIR/monitor.pid"
+        else
+            print_warning "Monitor Process nicht gefunden"
+        fi
+    else
+        print_warning "Kein aktiver Monitor gefunden"
+    fi
+}
+
+# ===== INTELLIGENT TASK EXECUTION =====
+execute_gpu_task() {
+    local task="$1"
+    shift
+    
+    if [ -z "$task" ]; then
+        print_error "Keine Task angegeben"
+        echo -e "${CYAN}Verwendung: $0 run \"Task Beschreibung\" [Optionen]${NC}"
+        return 1
+    fi
+    
+    # Parse arguments
+    local workers=8
+    local architecture="HIERARCHICAL"
+    local model="llama3"
+    local performance_mode="balanced"
+    local monitor=false
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --workers|-w)
+                workers="$2"
+                shift 2
+                ;;
+            --architecture|-a)
+                architecture="$2"
+                shift 2
+                ;;
+            --model|-m)
+                model="$2"
+                shift 2
+                ;;
+            --performance|-p)
+                performance_mode="$2"
+                shift 2
+                ;;
+            --monitor)
+                monitor=true
+                shift
+                ;;
+            *)
+                print_warning "Unbekannte Option: $1"
+                shift
+                ;;
+        esac
+    done
+    
+    # Adjust settings based on performance mode
+    case "$performance_mode" in
+        "max")
+            export OLLAMA_NUM_PARALLEL=16
+            export OLLAMA_GPU_LAYERS=45
+            workers=$((workers * 3 / 2))
+            ;;
+        "eco")
+            export OLLAMA_NUM_PARALLEL=4
+            export OLLAMA_GPU_LAYERS=25
+            workers=$((workers / 2))
+            if [ $workers -lt 2 ]; then workers=2; fi
+            ;;
+        "balanced")
+            # Use default settings
+            ;;
+    esac
+    
+    print_header
+    print_section "GPU-Optimierte Task Execution"
+    
+    print_info "Task: $task"
+    print_metric "Workers" "$workers" ""
+    print_metric "Architecture" "$architecture" ""
+    print_metric "Model" "$model" ""
+    print_metric "Performance Mode" "$performance_mode" ""
+    print_metric "GPU Layers" "$OLLAMA_GPU_LAYERS" ""
+    print_metric "Parallel Requests" "$OLLAMA_NUM_PARALLEL" ""
+    
+    # Start monitoring if requested
+    if [ "$monitor" = true ]; then
+        start_performance_monitor 600 &
+    fi
+    
+    print_info "🚀 Starte GPU-beschleunigte Verarbeitung..."
+    local start_time=$(date +%s)
+    
+    cd "$PROJECT_DIR"
+    
+    # Execute with enhanced error handling
+    if python main.py \
+        --config "$CONFIG_FILE" \
+        --task "$task" \
+        --worker-count "$workers" \
+        --architecture-type "$architecture" \
+        --ollama-model "$model" \
+        --backend ollama; then
+        
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        
+        print_success "Task erfolgreich abgeschlossen!"
+        print_metric "Execution Time" "${duration}s" ""
+        
+        # Save metrics
+        echo "{\"timestamp\":\"$(date -Iseconds)\",\"task\":\"$task\",\"workers\":$workers,\"duration\":$duration,\"performance_mode\":\"$performance_mode\"}" >> "$METRICS_FILE"
+        
+    else
+        print_error "Task-Execution fehlgeschlagen"
+        return 1
+    fi
+}
+
+# ===== BENCHMARKING =====
+run_advanced_benchmark() {
+    print_header
+    print_section "Advanced GPU Benchmark Suite"
+    
+    local benchmark_tasks=(
+        "Erstelle eine einfache Python Hello World Anwendung"
+        "Entwickle eine REST API mit FastAPI und Datenbankanbindung"
+        "Implementiere ein Machine Learning Modell mit scikit-learn für Klassifikation"
+        "Erstelle ein komplettes Django Web-Projekt mit User Authentication"
+    )
+    
+    local worker_configs=(2 4 8 12)
+    local performance_modes=("eco" "balanced" "max")
+    
+    print_info "🏃‍♂️ Starte umfassenden Benchmark..."
+    
+    # Start performance monitoring
+    start_performance_monitor 1800 # 30 minutes
+    
+    local results_file="$LOG_DIR/benchmark_$(date +%Y%m%d_%H%M%S).json"
+    echo "{\"benchmark_start\":\"$(date -Iseconds)\",\"results\":[" > "$results_file"
+    
+    local test_count=0
+    for mode in "${performance_modes[@]}"; do
+        for workers in "${worker_configs[@]}"; do
+            for task in "${benchmark_tasks[@]}"; do
+                test_count=$((test_count + 1))
+                print_info "Test $test_count: $mode mode, $workers workers"
+                
+                local start_time=$(date +%s)
+                if timeout 300 python main.py \
+                    --config "$CONFIG_FILE" \
+                    --task "$task" \
+                    --worker-count "$workers" \
+                    --architecture-type "HIERARCHICAL" \
+                    --backend ollama >/dev/null 2>&1; then
+                    
+                    local end_time=$(date +%s)
+                    local duration=$((end_time - start_time))
+                    
+                    echo "{\"test\":$test_count,\"mode\":\"$mode\",\"workers\":$workers,\"duration\":$duration,\"status\":\"success\"}," >> "$results_file"
+                    print_success "✓ Completed in ${duration}s"
+                else
+                    echo "{\"test\":$test_count,\"mode\":\"$mode\",\"workers\":$workers,\"duration\":null,\"status\":\"failed\"}," >> "$results_file"
+                    print_error "✗ Failed or timeout"
+                fi
+            done
+        done
+    done
+    
+    echo "]}" >> "$results_file"
+    stop_performance_monitor
+    
+    print_success "Benchmark abgeschlossen!"
+    print_info "Ergebnisse: $results_file"
+}
+
+# ===== HELP SYSTEM =====
+show_help() {
+    print_header
+    
+    echo -e "${BOLD}🎯 GPU-Optimierte Befehle:${NC}"
+    echo ""
+    echo -e "${CYAN}  run <task>              ${NC} Task mit GPU-Beschleunigung ausführen"
+    echo -e "${CYAN}  benchmark               ${NC} Erweiterte GPU Performance Benchmarks"
+    echo -e "${CYAN}  status                  ${NC} Detaillierter GPU Status und Konfiguration"
+    echo -e "${CYAN}  monitor [duration]      ${NC} GPU Performance Live-Monitoring"
+    echo -e "${CYAN}  stop-monitor            ${NC} Performance Monitoring stoppen"
+    echo -e "${CYAN}  optimize                ${NC} Automatische GPU-Optimierung"
+    echo -e "${CYAN}  logs                    ${NC} Performance Logs anzeigen"
+    echo -e "${CYAN}  config                  ${NC} Aktuelle Konfiguration anzeigen"
+    echo ""
+    echo -e "${BOLD}📊 Erweiterte Optionen:${NC}"
+    echo ""
+    echo -e "${CYAN}  --workers, -w <n>       ${NC} Anzahl Worker (2-16, default: 8)"
+    echo -e "${CYAN}  --performance, -p <mode>${NC} Performance Mode: eco/balanced/max"
+    echo -e "${CYAN}  --architecture, -a <type>${NC} HIERARCHICAL/CENTRALIZED/FULLY_CONNECTED"
+    echo -e "${CYAN}  --model, -m <model>     ${NC} LLM Model (llama3, mistral, codellama)"
+    echo -e "${CYAN}  --monitor               ${NC} Performance während Ausführung monitoren"
+    echo ""
+    echo -e "${BOLD}💡 Beispiele:${NC}"
+    echo ""
+    echo -e "${DIM}  # Standard GPU-beschleunigte Task${NC}"
+    echo -e "${GREEN}  $0 run \"Erstelle eine Python Web-App\" --workers 8${NC}"
+    echo ""
+    echo -e "${DIM}  # Maximum Performance Mode${NC}"
+    echo -e "${GREEN}  $0 run \"Komplexe AI Anwendung\" -w 12 -p max --monitor${NC}"
+    echo ""
+    echo -e "${DIM}  # Eco Mode für einfache Tasks${NC}"
+    echo -e "${GREEN}  $0 run \"Hello World App\" -p eco${NC}"
+    echo ""
+    echo -e "${DIM}  # Live GPU Monitoring${NC}"
+    echo -e "${GREEN}  $0 monitor 300  # 5 Minuten${NC}"
+    echo ""
+}
+
+# ===== MAIN FUNCTION =====
+main() {
+    setup_gpu_environment
+    
+    local command="${1:-help}"
+    shift 2>/dev/null || true
+    
+    case "$command" in
+        "run"|"execute")
+            execute_gpu_task "$@"
+            ;;
+        "benchmark"|"bench")
+            run_advanced_benchmark "$@"
+            ;;
+        "status"|"info")
+            print_header
+            show_gpu_status
+            ;;
+        "monitor")
+            local duration=${1:-300}
+            start_performance_monitor "$duration"
+            ;;
+        "stop-monitor")
+            stop_performance_monitor
+            ;;
+        "logs")
+            print_info "Performance Logs in: $LOG_DIR"
+            ls -la "$LOG_DIR"
+            ;;
+        "config")
+            print_header
+            print_section "Current Configuration"
+            if [ -f "$CONFIG_FILE" ]; then
+                head -30 "$CONFIG_FILE"
+            else
+                print_warning "Config file not found: $CONFIG_FILE"
+            fi
+            ;;
+        "optimize")
+            print_info "🔧 Auto-optimizing GPU settings..."
+            detect_gpu_config
+            print_success "GPU settings optimized for current workload"
+            ;;
+        "help"|"-h"|"--help")
+            show_help
+            ;;
+        *)
+            print_error "Unbekannter Befehl: $command"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Execute main function
+main "$@"

@@ -5,6 +5,7 @@ from typing import Optional, Any, List
 import re
 import os
 from enum import Enum
+import logging
 
 from agents.base_agent import BaseAgent, AgentMessage
 
@@ -16,38 +17,74 @@ except ImportError:
     ENHANCED_CODEGEN_AVAILABLE = False
     print("⚠️ Enhanced code generator not available, using fallback")
 
+# Import LLM Chooser
+try:
+    from llm_chooser import get_llm_chooser, choose_model_for_role
+    LLM_CHOOSER_AVAILABLE = True
+except ImportError:
+    LLM_CHOOSER_AVAILABLE = False
+    print("⚠️ LLM Chooser not available, using default models")
+
+logger = logging.getLogger(__name__)
+
 class DroneRole(Enum):
     """Different roles a drone can take"""
     ANALYST = "analyst"
     DATA_SCIENTIST = "datascientist"
     IT_ARCHITECT = "it_architect"
     DEVELOPER = "developer"
+    SECURITY_SPECIALIST = "security_specialist"
 
 class DroneAgent(BaseAgent):
     def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = DroneRole.DEVELOPER):
         super().__init__(agent_id, name)
-        self.model = model
+        self.model = model  # Fallback model
         self.project_folder_path = project_folder_path
         self.role = role
         self.capabilities = self._get_role_capabilities()
+        
+        # Initialize LLM Chooser for dynamic model selection
+        self.llm_chooser = None
+        if LLM_CHOOSER_AVAILABLE:
+            try:
+                self.llm_chooser = get_llm_chooser()
+                logger.info(f"✅ LLM Chooser initialized for {self.name} ({self.role.value})")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize LLM Chooser: {e}")
         
         # Initialize enhanced code generator if available
         self.code_generator = None
         if ENHANCED_CODEGEN_AVAILABLE:
             try:
                 self.code_generator = create_code_generator()
-                print(f"✅ Enhanced code generator initialized for {self.name}")
+                logger.info(f"✅ Enhanced code generator initialized for {self.name}")
             except Exception as e:
-                print(f"⚠️ Failed to initialize enhanced code generator: {e}")
+                logger.warning(f"⚠️ Failed to initialize enhanced code generator: {e}")
 
     async def _perform_task(self, prompt: str) -> str:
         try:
+            # Wähle optimales LLM basierend auf Rolle und Task
+            selected_model = self._choose_optimal_model(prompt)
+            
+            # Erweitere Prompt um rollenspezifische Kontexte
+            enhanced_prompt = self._enhance_prompt_for_role(prompt)
+            
+            logger.info(f"🎯 {self.name} ({self.role.value}) uses model: {selected_model}")
+            
             response = ollama.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                model=selected_model,
+                messages=[{"role": "user", "content": enhanced_prompt}],
             )
-            return response["message"]["content"]
+            
+            # Post-processing basierend auf Rolle
+            result = response["message"]["content"]
+            if self.role == DroneRole.SECURITY_SPECIALIST:
+                result = self._add_security_recommendations(result, prompt)
+                
+            return result
+            
         except Exception as e:
+            logger.error(f"❌ Task execution failed for {self.name}: {e}")
             print(f"Error performing task: {e}")
             raise
 
@@ -277,9 +314,153 @@ Be practical and use command-line tools effectively. Respond with clear steps an
             DroneRole.DEVELOPER: [
                 "coding", "debugging", "testing", "deployment",
                 "version_control", "code_review", "problem_solving"
+            ],
+            DroneRole.SECURITY_SPECIALIST: [
+                "security_audit", "vulnerability_assessment", "penetration_testing",
+                "secure_coding", "threat_modeling", "compliance_check",
+                "encryption_implementation", "authentication_design", "authorization_patterns",
+                "security_architecture_review", "risk_assessment", "incident_response"
             ]
         }
         return capabilities_map.get(self.role, [])
+    
+    def _choose_optimal_model(self, task_context: str) -> str:
+        """Wählt das optimale LLM basierend auf Rolle und Task-Kontext"""
+        if self.llm_chooser:
+            try:
+                optimal_model = self.llm_chooser.choose_model_for_role(
+                    self.role.value, 
+                    task_context
+                )
+                logger.info(f"🎯 Model chosen for {self.role.value}: {optimal_model}")
+                return optimal_model
+            except Exception as e:
+                logger.warning(f"⚠️ LLM selection failed, using fallback: {e}")
+        
+        return self.model  # Fallback to default
+    
+    def _enhance_prompt_for_role(self, prompt: str) -> str:
+        """Erweitert den Prompt um rollenspezifische Kontexte und Anweisungen"""
+        role_context = self._get_role_context()
+        security_context = ""
+        
+        # Spezielle Security-Behandlung
+        if self.role == DroneRole.SECURITY_SPECIALIST:
+            security_context = self._get_security_context(prompt)
+        
+        enhanced_prompt = f"""{role_context}
+
+TASK: {prompt}
+
+{security_context}
+
+Provide a comprehensive response that leverages your role-specific expertise."""
+        
+        return enhanced_prompt
+    
+    def _get_security_context(self, task: str) -> str:
+        """Erstellt Security-spezifischen Kontext"""
+        security_frameworks = [
+            "OWASP Top 10", "NIST Cybersecurity Framework", "ISO 27001",
+            "SANS Top 25", "CWE (Common Weakness Enumeration)"
+        ]
+        
+        task_lower = task.lower()
+        context_parts = []
+        
+        # Erkenne Security-relevante Keywords
+        if any(keyword in task_lower for keyword in ['web', 'api', 'application', 'app']):
+            context_parts.append("""
+SECURITY FOCUS - Web Application:
+- Apply OWASP Top 10 principles (Injection, Broken Auth, Sensitive Data, XXE, etc.)
+- Implement proper input validation and output encoding
+- Use secure session management and CSRF protection
+- Ensure proper authentication and authorization patterns""")
+        
+        if any(keyword in task_lower for keyword in ['database', 'sql', 'data']):
+            context_parts.append("""
+SECURITY FOCUS - Data Protection:
+- Implement SQL injection prevention (parameterized queries)
+- Use encryption for sensitive data at rest and in transit
+- Apply principle of least privilege for database access
+- Implement proper backup encryption and access controls""")
+        
+        if any(keyword in task_lower for keyword in ['authentication', 'login', 'user']):
+            context_parts.append("""
+SECURITY FOCUS - Authentication & Authorization:
+- Implement multi-factor authentication (MFA)
+- Use secure password policies and hashing (bcrypt, Argon2)
+- Apply JWT security best practices
+- Implement proper session timeout and management""")
+        
+        if any(keyword in task_lower for keyword in ['api', 'rest', 'microservice']):
+            context_parts.append("""
+SECURITY FOCUS - API Security:
+- Implement proper API authentication (OAuth 2.0, JWT)
+- Use rate limiting and throttling
+- Apply input validation and sanitization
+- Implement proper error handling (avoid information disclosure)""")
+        
+        if any(keyword in task_lower for keyword in ['architecture', 'design', 'system']):
+            context_parts.append("""
+SECURITY FOCUS - Architecture Security:
+- Apply defense in depth principles
+- Implement zero-trust architecture concepts
+- Use secure communication protocols (TLS 1.3+)
+- Design with security by default and privacy by design""")
+        
+        # Standard Security-Kontext wenn keine spezifischen Keywords gefunden
+        if not context_parts:
+            context_parts.append("""
+GENERAL SECURITY PRINCIPLES:
+- Follow secure coding practices
+- Apply principle of least privilege
+- Implement proper error handling and logging
+- Use security-focused libraries and frameworks
+- Consider threat modeling and risk assessment""")
+        
+        return "\n".join(context_parts) + f"""
+
+SECURITY FRAMEWORKS TO CONSIDER: {', '.join(security_frameworks[:3])}
+
+ALWAYS INCLUDE:
+1. Specific security vulnerabilities to watch for
+2. Concrete implementation recommendations
+3. Security testing suggestions
+4. Compliance considerations if applicable"""
+    
+    def _add_security_recommendations(self, result: str, original_task: str) -> str:
+        """Fügt Security-Empfehlungen zum Ergebnis hinzu"""
+        security_addendum = f"""
+
+🔒 SECURITY SPECIALIST RECOMMENDATIONS:
+
+IMMEDIATE ACTIONS:
+• Code Review: Scan the above implementation for common vulnerabilities
+• Security Testing: Plan penetration testing and security audits
+• Dependency Check: Verify all dependencies for known vulnerabilities
+• Access Control: Implement proper authentication and authorization
+
+SECURITY CHECKLIST:
+□ Input validation implemented
+□ Output encoding applied
+□ SQL injection prevention in place
+□ XSS protection implemented
+□ CSRF tokens used where applicable
+□ Secure headers configured
+□ Error handling doesn't leak sensitive information
+□ Logging and monitoring configured
+
+NEXT STEPS:
+1. Conduct threat modeling for this implementation
+2. Set up automated security scanning (SAST/DAST)
+3. Plan regular security reviews and updates
+4. Document security architecture decisions
+
+⚠️  SECURITY REMINDER: This analysis is based on the provided context. 
+Always conduct thorough security reviews with qualified security professionals."""
+
+        return result + security_addendum
     
     def _get_role_context(self) -> str:
         """Get role-specific context for enhanced prompts"""
@@ -304,6 +485,28 @@ When given tasks, focus on robust, scalable solutions with proper architecture p
 You are a DEVELOPER DRONE specializing in coding and implementation.
 Your expertise: Python programming, debugging, testing, deployment, code optimization.
 When given coding tasks, write complete, functional code with proper structure and documentation.
+""",
+            DroneRole.SECURITY_SPECIALIST: """
+You are a SECURITY SPECIALIST DRONE specializing in cybersecurity and secure development.
+Your expertise: Security audits, vulnerability assessment, secure coding, penetration testing, 
+threat modeling, compliance, encryption, authentication systems, and security architecture.
+
+CORE RESPONSIBILITIES:
+- Identify and mitigate security vulnerabilities
+- Implement secure coding practices
+- Design secure authentication and authorization systems
+- Conduct security reviews and threat assessments
+- Ensure compliance with security standards (OWASP, NIST, ISO 27001)
+- Provide security recommendations for architecture and implementation
+
+When analyzing code or systems:
+1. Always identify potential security vulnerabilities
+2. Recommend specific security measures and implementations
+3. Reference relevant security frameworks and standards
+4. Provide actionable security recommendations
+5. Consider both technical and business security implications
+
+SECURITY MINDSET: Assume breach, verify everything, minimize attack surface, defense in depth.
 """
         }
         return role_contexts.get(self.role, "You are a specialized drone agent.")

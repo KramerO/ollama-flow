@@ -1,0 +1,66 @@
+================================================================================
+OLLAMA FLOW ENHANCED RESEARCH REPORT
+================================================================================
+
+Anfrage: Frauke Brosius-Gersdorf Hetzkampagne
+Workflow ID: 0cb9be9a-ceb4-4aaa-88bf-5b073b0a6991
+Status: completed
+Vertrauenswert: 0.30/1.0
+Erstellt: 2025-08-09T20:34:22.282497
+
+RECHERCHE-ERGEBNISSE
+----------------------------------------
+
+Drohne 1: researcher_1_enhanced
+Typ: enhanced
+Vertrauen: 0.32
+Social Media Quellen: 2
+  • Instagram: 1 Ergebnisse
+  • Web: 1 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 2 Social Media Ergebnissen
+
+Drohne 2: researcher_2_enhanced
+Typ: enhanced
+Vertrauen: 0.32
+Social Media Quellen: 2
+  • Instagram: 1 Ergebnisse
+  • Web: 1 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 2 Social Media Ergebnissen
+
+Drohne 3: researcher_3
+Typ: traditional
+Vertrauen: 0.30
+Fakten:
+  • Frauke Brosius-Gersdorf war SPD-Kandidatin für das Bundesverfassungsgericht
+  • Sie zog ihre Kandidatur nach einer intensiven öffentlichen Kampagne zurück
+  • Die Kampagne richtete sich gegen ihre Positionen zu Schwangerschaftsabbrüchen und AfD-Verbot
+Perspektiven:
+  • SPD: Schmutzkampagne gegen qualifizierte Kandidatin
+  • Union: Bedenken über politische Ausrichtung
+
+FACT-CHECK ERGEBNISSE
+----------------------------------------
+
+Validiert: 0/2
+
+Fact-Check 1: factchecker_1
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+Fact-Check 2: factchecker_2
+Status: ✗ Nicht bestanden
+Bewertung: 0/10
+
+ANALYSE-ERGEBNISSE
+----------------------------------------
+
+Analyse 1: analyst_1
+Vertrauen: 0.00
+
+Analyse 2: analyst_2
+Vertrauen: 0.00
+
+--------------------------------------------------------------------------------
+Erstellt mit Ollama Flow Multi-Role System
+Enhanced Mode: True
+--------------------------------------------------------------------------------

@@ -1,0 +1,32 @@
+{
+  "profiles": {
+    "eco": {
+      "workers": 4,
+      "gpu_layers": 25,
+      "parallel_requests": 4,
+      "memory_limit": 60,
+      "description": "Energy efficient mode for simple tasks"
+    },
+    "balanced": {
+      "workers": 8,
+      "gpu_layers": 35,
+      "parallel_requests": 8,
+      "memory_limit": 80,
+      "description": "Optimal balance of performance and efficiency"
+    },
+    "performance": {
+      "workers": 12,
+      "gpu_layers": 40,
+      "parallel_requests": 12,
+      "memory_limit": 90,
+      "description": "High performance for complex tasks"
+    },
+    "max": {
+      "workers": 16,
+      "gpu_layers": 45,
+      "parallel_requests": 16,
+      "memory_limit": 95,
+      "description": "Maximum performance, all resources utilized"
+    }
+  }
+}

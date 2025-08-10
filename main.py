@@ -9,7 +9,80 @@ from agents.sub_queen_agent import SubQueenAgent
 from agents.drone_agent import DroneAgent, DroneRole
 from db_manager import MessageDBManager # Import the new DB Manager
 
+# Import LLM Chooser
+try:
+    from llm_chooser import get_llm_chooser, LLMChooser
+    LLM_CHOOSER_AVAILABLE = True
+except ImportError:
+    LLM_CHOOSER_AVAILABLE = False
+    print("⚠️ LLM Chooser not available")
+
 load_dotenv()
+
+async def handle_llm_config_commands(args):
+    """Handle LLM Chooser configuration commands"""
+    try:
+        chooser = get_llm_chooser()
+        
+        if args.list_models:
+            print("🤖 Available Ollama Models and Role Mappings:")
+            print("=" * 50)
+            
+            # List available models
+            models = chooser.available_models
+            if models:
+                print(f"📋 Available Models ({len(models)}):")
+                for model in models:
+                    model_info = chooser.get_model_info(model)
+                    strengths = ", ".join(model_info.get('strengths', ['unknown']))
+                    print(f"  • {model} - Strengths: {strengths}")
+            else:
+                print("  No models detected. Run 'ollama list' to check your installation.")
+            
+            print(f"\n🎯 Role-to-Model Mappings:")
+            for role, config in chooser.role_model_mapping.items():
+                primary = config.get('primary', 'none')
+                fallbacks = config.get('fallback', [])
+                print(f"  • {role.upper()}: {primary} (fallback: {', '.join(fallbacks)})")
+        
+        elif args.show_config:
+            print("⚙️  Current LLM Chooser Configuration:")
+            print("=" * 40)
+            print(f"Default Model: {chooser.default_model}")
+            print(f"Config File: {chooser.config_path}")
+            print(f"Available Models: {len(chooser.available_models)}")
+            
+            print(f"\n🎯 Role Mappings:")
+            for role, config in chooser.role_model_mapping.items():
+                print(f"  {role}: {config}")
+        
+        elif args.config_role:
+            # Parse role:model format
+            if ':' not in args.config_role:
+                print("❌ Invalid format. Use 'role:model' format (e.g., 'developer:codegemma:7b')")
+                return
+            
+            parts = args.config_role.split(':', 1)
+            role = parts[0].lower().strip()
+            model = parts[1].strip()
+            
+            # Validate role
+            valid_roles = ['developer', 'security_specialist', 'it_architect', 'analyst', 'datascientist']
+            if role not in valid_roles:
+                print(f"❌ Invalid role '{role}'. Valid roles: {', '.join(valid_roles)}")
+                return
+            
+            # Update role mapping
+            chooser.update_role_mapping(role, model)
+            print(f"✅ Updated {role} role to use model: {model}")
+        
+        elif args.reset_config:
+            print("🔄 Resetting LLM Chooser configuration to defaults...")
+            chooser._create_default_config()
+            print("✅ Configuration reset complete!")
+        
+    except Exception as e:
+        print(f"❌ Error handling LLM config command: {e}")
 
 async def main():
     parser = argparse.ArgumentParser(description="Ollama Flow Framework CLI")
@@ -19,7 +92,19 @@ async def main():
     parser.add_argument("--worker-count", type=int, help="Number of drone agents (legacy, use --drone-count).")  # Legacy support
     parser.add_argument("--architecture-type", type=str, choices=["HIERARCHICAL", "CENTRALIZED", "FULLY_CONNECTED"], help="Architecture type (HIERARCHICAL, CENTRALIZED, FULLY_CONNECTED).")
     parser.add_argument("--ollama-model", type=str, help="Ollama model to use (e.g., llama3).")
+    
+    # LLM Chooser configuration options
+    parser.add_argument("--list-models", action="store_true", help="List available Ollama models and current role mappings.")
+    parser.add_argument("--config-role", type=str, help="Configure model for specific role (e.g., 'developer:codegemma:7b').")
+    parser.add_argument("--show-config", action="store_true", help="Show current LLM chooser configuration.")
+    parser.add_argument("--reset-config", action="store_true", help="Reset LLM chooser configuration to defaults.")
+    
     args = parser.parse_args()
+
+    # Handle LLM Chooser configuration options first
+    if LLM_CHOOSER_AVAILABLE and (args.list_models or args.config_role or args.show_config or args.reset_config):
+        await handle_llm_config_commands(args)
+        return
 
     # Initialize DB Manager
     db_manager = MessageDBManager(db_path='ollama_flow_messages.db')

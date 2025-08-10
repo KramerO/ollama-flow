@@ -37,7 +37,7 @@
     ┌────▼───┐  ┌────▼───┐  ┌────▼───┐  ┌────▼───┐
     │ DRONE  │  │ DRONE  │  │ DRONE  │  │ DRONE  │
     │   #1   │  │   #2   │  │   #3   │  │   #4   │
-    │analyst │  │data-sci│  │architect│  │developer│
+    │analyst │  │data-sci│  │architect│  │security│
     └────────┘  └────────┘  └────────┘  └────────┘
 ```
 **Ideal für:** Komplexe Aufgaben mit spezialisierter Koordination
@@ -53,27 +53,29 @@
             │              │              │
             │         ┌────┼────┐         │  
             │         │         │         │
-       ┌────▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼────┐
-       │ DRONE  │ │ DRONE │ │ DRONE │ │ DRONE  │
-       │   #1   │ │   #2  │ │   #3  │ │   #4   │
-       │analyst │ │data-sci│ │architect│ │developer│
-       └────────┘ └───────┘ └───────┘ └────────┘
+       ┌────▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼────┐ ┌───▼────┐
+       │ DRONE  │ │ DRONE │ │ DRONE │ │ DRONE  │ │ DRONE  │
+       │   #1   │ │   #2  │ │   #3  │ │   #4   │ │   #5   │
+       │analyst │ │data-sci│ │architect│ │security│ │developer│
+       └────────┘ └───────┘ └───────┘ └────────┘ └────────┘
 ```
 **Ideal für:** Sequenzielle Aufgaben mit direkter Koordination
 
 #### **FULLY_CONNECTED** - Vollvernetzte Struktur
 ```
-           ┌─────────┐ ◄──────────► ┌─────────┐
-           │ AGENT 1 │               │ AGENT 2 │
-           │ analyst │ ◄─────┐ ┌────► │data-sci │
-           └─────────┘       │ │     └─────────┘
-                 ▲           │ │           ▲
-                 │           │ │           │
-                 ▼           │ │           ▼
-           ┌─────────┐       │ │     ┌─────────┐
-           │ AGENT 4 │ ◄─────┘ └────► │ AGENT 3 │
-           │developer│               │architect│
-           └─────────┘ ◄──────────► └─────────┘
+     ┌─────────┐ ◄──────────► ┌─────────┐
+     │ AGENT 1 │               │ AGENT 2 │
+     │ analyst │ ◄─────┐ ┌────► │data-sci │
+     └─────────┘   ┌───│ │───┐ └─────────┘
+           ▲       │   │ │   │       ▲
+           │   ┌───▼─────┴─────▼───┐   │
+           │   │   AGENT 5 (DEV)   │   │
+           │   └───▲─────┬─────▲───┘   │
+           ▼       │   │ │   │       ▼
+     ┌─────────┐   └───│ │───┘ ┌─────────┐
+     │ AGENT 4 │ ◄─────┘ └────► │ AGENT 3 │
+     │security │               │architect│
+     └─────────┘ ◄──────────► └─────────┘
 ```
 **Ideal für:** Kollaborative Aufgaben mit Peer-to-Peer-Kommunikation
 
@@ -233,6 +235,7 @@ python3 cli_dashboard.py
 | **DATA_SCIENTIST** | 🤖 | ML, Computer Vision, OpenCV | KI-Projekte, Bildverarbeitung |
 | **IT_ARCHITECT** | 🏛️ | System-Design, Infrastruktur | Enterprise-Architektur, Skalierung |
 | **DEVELOPER** | 💻 | Coding, Testing, Deployment | Software-Entwicklung, DevOps |
+| **SECURITY_SPECIALIST** | 🔒 | Security Audits, Vulnerability Analysis | Sicherheitsanalyse, Penetration Testing |
 
 ### **Intelligente Rollenzuweisung:**
 ```python
@@ -243,6 +246,7 @@ task = "Erstelle OpenCV Bilderkennungssystem mit ML-Pipeline"
 # - DEVELOPER: Code-Implementierung
 # - IT_ARCHITECT: System-Architektur
 # - ANALYST: Performance-Analyse
+# - SECURITY_SPECIALIST: Sicherheitsanalyse bei sensiblen Aufgaben
 ```
 
 ## 📁 **Projektstruktur**
@@ -304,7 +308,15 @@ ollama-flow run \
   --drones 4 --arch FULLY_CONNECTED --model llama3:latest
 ```
 
-### **4. Deutsche Sprachunterstützung (CLI)**
+### **4. Security & Vulnerability Analysis (CLI)**
+```bash
+# Security-focused tasks automatically use Security Specialist
+ollama-flow run \
+  "Analyze code for security vulnerabilities and create secure authentication system" \
+  --drones 4 --arch HIERARCHICAL --model llama3:latest
+```
+
+### **5. Deutsche Sprachunterstützung (CLI)**
 ```bash
 # Deutschsprachige Aufgaben werden automatisch erkannt und übersetzt
 ollama-flow run \
@@ -312,7 +324,7 @@ ollama-flow run \
   --drones 6 --arch HIERARCHICAL --model codellama:7b
 ```
 
-### **5. Direkte Framework-Nutzung (Erweitert)**
+### **6. Direkte Framework-Nutzung (Erweitert)**
 ```bash
 # Für Entwickler, die direkte Framework-Kontrolle benötigen
 python3 main.py \

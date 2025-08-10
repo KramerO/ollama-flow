@@ -180,6 +180,13 @@ class SubQueenAgent(BaseAgent):
                 'code', 'develop', 'implement', 'build', 'create', 'program',
                 'function', 'class', 'script', 'application', 'web', 'frontend',
                 'backend', 'debug', 'test', 'fix', 'python', 'erstelle', 'baust'
+            ],
+            DroneRole.SECURITY_SPECIALIST: [
+                'security', 'secure', 'vulnerability', 'audit', 'penetration', 'encrypt',
+                'authenticate', 'authorize', 'compliance', 'threat', 'attack', 'defense',
+                'owasp', 'csrf', 'xss', 'injection', 'authentication', 'authorization',
+                'ssl', 'tls', 'firewall', 'intrusion', 'malware', 'breach', 'privacy',
+                'sicherheit', 'verschlüsselung', 'angriff', 'schutz', 'bedrohung'
             ]
         }
         
@@ -209,7 +216,8 @@ class SubQueenAgent(BaseAgent):
             DroneRole.ANALYST: "As an analyst drone, focus on data analysis, pattern recognition, and generating comprehensive reports.",
             DroneRole.DATA_SCIENTIST: "As a data scientist drone, focus on machine learning, statistical analysis, and data-driven insights.",
             DroneRole.IT_ARCHITECT: "As an IT architect drone, focus on system design, scalability, security, and infrastructure planning.",
-            DroneRole.DEVELOPER: "As a developer drone, focus on coding, implementation, testing, and creating functional solutions."
+            DroneRole.DEVELOPER: "As a developer drone, focus on coding, implementation, testing, and creating functional solutions.",
+            DroneRole.SECURITY_SPECIALIST: "As a security specialist drone, focus on identifying vulnerabilities, implementing secure coding practices, conducting security audits, and ensuring compliance with security standards."
         }
         
         context = role_context.get(role, "Complete the assigned task efficiently.")

@@ -1,0 +1,72 @@
+================================================================================
+OLLAMA FLOW ENHANCED RESEARCH REPORT
+================================================================================
+
+Anfrage: Frauke Brosius-Gersdorf
+Workflow ID: 1a6c0ce0-567d-4eb5-9fb0-1122ca45be9f
+Status: completed
+Vertrauenswert: 0.26/1.0
+Erstellt: 2025-08-09T22:23:37.046762
+
+RECHERCHE-ERGEBNISSE
+----------------------------------------
+
+Drohne 1: researcher_1_enhanced
+Typ: enhanced
+Vertrauen: 0.44
+Social Media Quellen: 14
+  • Twitter: 2 Ergebnisse
+  • Instagram: 2 Ergebnisse
+  • Bluesky: 2 Ergebnisse
+  • News: 3 Ergebnisse
+  • Web: 5 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 14 Social Media Ergebnissen
+
+Drohne 2: researcher_2_enhanced
+Typ: enhanced
+Vertrauen: 0.43
+Social Media Quellen: 13
+  • Twitter: 2 Ergebnisse
+  • Instagram: 2 Ergebnisse
+  • Bluesky: 2 Ergebnisse
+  • News: 2 Ergebnisse
+  • Web: 5 Ergebnisse
+Suche: Durchsucht 5 Plattformen mit 13 Social Media Ergebnissen
+
+Drohne 3: researcher_3
+Typ: traditional
+Vertrauen: 0.30
+Fakten:
+  • Frauke Brosius-Gersdorf war SPD-Kandidatin für das Bundesverfassungsgericht
+  • Sie zog ihre Kandidatur nach einer intensiven öffentlichen Kampagne zurück
+  • Die Kampagne richtete sich gegen ihre Positionen zu Schwangerschaftsabbrüchen und AfD-Verbot
+Perspektiven:
+  • SPD: Schmutzkampagne gegen qualifizierte Kandidatin
+  • Union: Bedenken über politische Ausrichtung
+
+FACT-CHECK ERGEBNISSE
+----------------------------------------
+
+Validiert: 0/2
+
+Fact-Check 1: factchecker_1
+Status: ✗ Nicht bestanden
+Bewertung: 3/10
+
+Fact-Check 2: factchecker_2
+Status: ✗ Nicht bestanden
+Bewertung: 3/10
+
+ANALYSE-ERGEBNISSE
+----------------------------------------
+
+Analyse 1: analyst_1
+Vertrauen: 0.00
+
+Analyse 2: analyst_2
+Vertrauen: 0.00
+
+--------------------------------------------------------------------------------
+Erstellt mit Ollama Flow Multi-Role System
+Enhanced Mode: True
+--------------------------------------------------------------------------------
