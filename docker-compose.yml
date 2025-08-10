@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # Redis for enhanced database performance
+  redis:
+    image: redis:7.2-alpine
+    container_name: ollama-flow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ollama-flow-net
+
+  # Main Ollama Flow application
+  ollama-flow:
+    build: .
+    container_name: ollama-flow-app
+    ports:
+      - "8080:8080"  # Dashboard port
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OLLAMA_HOST=host.docker.internal:11434
+      - DOCKER_MODE=true
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - ollama-flow-net
+    restart: unless-stopped
+
+  # Agent worker containers - scalable
+  agent-worker-1:
+    build: .
+    container_name: ollama-flow-worker-1
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OLLAMA_HOST=host.docker.internal:11434
+      - DOCKER_MODE=true
+      - AGENT_MODE=worker
+      - WORKER_ID=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python3", "agents/docker_agent_worker.py"]
+    networks:
+      - ollama-flow-net
+    restart: unless-stopped
+
+  agent-worker-2:
+    build: .
+    container_name: ollama-flow-worker-2
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OLLAMA_HOST=host.docker.internal:11434
+      - DOCKER_MODE=true
+      - AGENT_MODE=worker
+      - WORKER_ID=2
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python3", "agents/docker_agent_worker.py"]
+    networks:
+      - ollama-flow-net
+    restart: unless-stopped
+
+  # Monitoring service
+  monitoring:
+    build: .
+    container_name: ollama-flow-monitoring
+    ports:
+      - "9090:9090"  # Monitoring port
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONITORING_PORT=9090
+    volumes:
+      - ./logs:/app/logs
+      - ./monitoring:/app/monitoring
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python3", "monitoring_system.py", "--docker-mode", "--port", "9090"]
+    networks:
+      - ollama-flow-net
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  ollama-flow-net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
