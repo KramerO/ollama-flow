@@ -354,20 +354,29 @@ TASK: {prompt}
 
 {security_context}
 
-IMPORTANT REQUIREMENTS:
-1. CREATE ACTUAL CODE/FILES - Do not just describe what you would do
-2. Use command-line tools to create real files (touch, echo, cat > file.py, etc.)
-3. Write functional, complete code that actually works
-4. Save all code to files in the project directory
-5. Execute commands to validate your implementation
+❗ CRITICAL REQUIREMENTS - NO EXCEPTIONS ❗
+1. EXECUTE COMMANDS IMMEDIATELY - Stop describing, start executing
+2. CREATE FILES WITH ACTUAL CODE CONTENT - Never use just 'touch'
+3. EXAMPLE COMMANDS YOU MUST USE:
+   - echo "#!/usr/bin/env python3" > shodan_clone.py
+   - cat << 'EOF' > main_program.py
+   - pip install requests socket-scanner nmap
+4. WRITE COMPLETE FUNCTIONAL CODE - Not empty files or placeholders
+5. VALIDATE IMPLEMENTATION - Run python -c "import module_name"
 
 WORKING DIRECTORY: {self.project_folder_path if self.project_folder_path else '.'}
 
-REQUIRED OUTPUT: Provide both:
-- Working code/implementation (create actual files)
-- Brief explanation of what you implemented
+⚠️ FAILURE CONDITIONS ⚠️
+- If you describe instead of executing → TASK FAILED
+- If you create empty files → TASK FAILED  
+- If you plan without implementing → TASK FAILED
 
-Execute commands and create files NOW, do not just plan or describe."""
+✅ SUCCESS CONDITIONS ✅
+- Files created with working code content
+- Code can be executed without errors
+- All dependencies documented in requirements.txt
+
+EXECUTE COMMANDS NOW! No more talking, only doing!"""
         
         return enhanced_prompt
     
@@ -588,24 +597,34 @@ WORKING STYLE:
 • Documentation-driven development
 • Agile methodologies and iterative delivery
 
-EXECUTION COMMANDS YOU MUST USE:
-• echo "code content" > filename.py (create Python files)
-• cat << 'EOF' > filename.py (create multi-line files)
-• touch filename.ext (create empty files)
-• python -c "import module; print('test')" (validate code)
-• pip install package_name (install dependencies)
-• ls -la (verify files created)
+❌ FORBIDDEN COMMANDS:
+• touch filename.py (creates empty files - NEVER USE!)
+• "I will create..." (describing instead of doing - FORBIDDEN!)
 
-TECHNICAL STANDARDS:
-• ALWAYS create actual working files with real code
-• Production-ready code with error handling
-• Include proper imports, functions, and main execution
-• Create requirements.txt for dependencies
-• Add proper docstrings and comments
+✅ REQUIRED COMMANDS - USE THESE IMMEDIATELY:
+• echo "#!/usr/bin/env python3" > shodan_scanner.py
+• cat << 'EOF' > network_scanner.py
+[ACTUAL PYTHON CODE HERE]
+EOF
+• pip install requests nmap python-nmap socket
+• python -c "import requests; print('Working')"
 
-COLLABORATION: Implement architect designs, integrate with data scientist models, follow security specialist guidelines.
+EXAMPLE REAL IMPLEMENTATION:
+echo "import socket, threading, requests" > shodan_clone.py
+cat << 'EOF' >> shodan_clone.py
+def scan_port(ip, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((ip, port))
+    return result == 0
+EOF
 
-CRITICAL: You MUST execute commands to create actual files. Do not just describe or plan.
+⚠️ EXECUTION RULES ⚠️
+1. Write REAL CODE in files - not placeholders
+2. Use cat << 'EOF' for multi-line Python code
+3. Test code with python -c "import module"
+4. Never use touch - always include content
+
+CRITICAL: EXECUTE NOW! Stop planning, start coding!
 """,
             DroneRole.SECURITY_SPECIALIST: """
 🎯 ROLE: SECURITY SPECIALIST DRONE - Cybersecurity & Compliance Expert
