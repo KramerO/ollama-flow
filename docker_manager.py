@@ -249,53 +249,53 @@ class DockerManager:
             logger.error(f"Failed to start main app container: {e}")
             raise
     
-    async def start_agent_workers(self, count: int = 4):
-        """Start specified number of agent worker containers"""
+    async def start_agent_drones(self, count: int = 4):
+        """Start specified number of agent drone containers"""
         try:
-            logger.info(f"Starting {count} agent worker containers...")
+            logger.info(f"Starting {count} agent drone containers...")
             
-            workers = []
+            drones = []
             for i in range(1, count + 1):
-                worker = await self._start_agent_worker(i)
-                workers.append(worker)
+                drone = await self._start_agent_drone(i)
+                drones.append(drone)
             
-            logger.info(f"Successfully started {len(workers)} agent workers")
-            return workers
+            logger.info(f"Successfully started {len(drones)} agent drones")
+            return drones
             
         except DockerException as e:
-            logger.error(f"Failed to start agent workers: {e}")
+            logger.error(f"Failed to start agent drones: {e}")
             raise
     
-    async def _start_agent_worker(self, worker_id: int):
-        """Start a single agent worker container"""
-        container_name = f"ollama-flow-worker-{worker_id}"
+    async def _start_agent_drone(self, drone_id: int):
+        """Start a single agent drone container"""
+        container_name = f"ollama-flow-drone-{drone_id}"
         
-        # Check if worker already exists
+        # Check if drone already exists
         existing_container = self._get_container(container_name)
         if existing_container:
             if existing_container.status != "running":
                 existing_container.start()
             else:
-                logger.info(f"Worker {worker_id} already running")
+                logger.info(f"Drone {drone_id} already running")
             self.containers[container_name] = existing_container
             return existing_container
         
-        # Environment for this worker
+        # Environment for this drone
         environment = {
             'PYTHONUNBUFFERED': '1',
             'REDIS_HOST': self.redis_container_name,
             'REDIS_PORT': '6379',
             'OLLAMA_HOST': 'host.docker.internal:11434',
             'DOCKER_MODE': 'true',
-            'AGENT_MODE': 'worker',
-            'WORKER_ID': str(worker_id)
+            'AGENT_MODE': 'drone',
+            'DRONE_ID': str(drone_id)
         }
         
         # Create volumes
         data_volume = self._ensure_volume("ollama-flow-data")
         logs_volume = self._ensure_volume("ollama-flow-logs")
         
-        # Start worker container
+        # Start drone container
         container = self.docker_client.containers.run(
             self.image_name,
             name=container_name,
@@ -305,13 +305,13 @@ class DockerManager:
                 logs_volume.name: {'bind': '/app/logs', 'mode': 'rw'}
             },
             network=self.network_name,
-            command=["python3", "agents/docker_agent_worker.py"],
+            command=["python3", "agents/docker_drone_agent.py"],
             detach=True,
             restart_policy={"Name": "unless-stopped"}
         )
         
         self.containers[container_name] = container
-        logger.info(f"Agent worker {worker_id} started: {container.id[:12]}")
+        logger.info(f"Agent drone {drone_id} started: {container.id[:12]}")
         
         return container
     
@@ -354,41 +354,41 @@ class DockerManager:
         
         raise Exception(f"Container {container.name} failed to become healthy within {timeout}s")
     
-    async def scale_workers(self, target_count: int):
-        """Scale agent workers to target count"""
+    async def scale_drones(self, target_count: int):
+        """Scale agent drones to target count"""
         try:
-            current_workers = [name for name in self.containers.keys() 
-                             if name.startswith("ollama-flow-worker-")]
-            current_count = len(current_workers)
+            current_drones = [name for name in self.containers.keys() 
+                            if name.startswith("ollama-flow-drone-")]
+            current_count = len(current_drones)
             
-            logger.info(f"Scaling workers from {current_count} to {target_count}")
+            logger.info(f"Scaling drones from {current_count} to {target_count}")
             
             if target_count > current_count:
                 # Scale up
                 for i in range(current_count + 1, target_count + 1):
-                    await self._start_agent_worker(i)
+                    await self._start_agent_drone(i)
             elif target_count < current_count:
                 # Scale down
                 for i in range(target_count + 1, current_count + 1):
-                    await self._stop_agent_worker(i)
+                    await self._stop_agent_drone(i)
             
-            logger.info(f"Successfully scaled to {target_count} workers")
+            logger.info(f"Successfully scaled to {target_count} drones")
             
         except Exception as e:
-            logger.error(f"Failed to scale workers: {e}")
+            logger.error(f"Failed to scale drones: {e}")
             raise
     
-    async def _stop_agent_worker(self, worker_id: int):
-        """Stop a specific agent worker"""
-        container_name = f"ollama-flow-worker-{worker_id}"
+    async def _stop_agent_drone(self, drone_id: int):
+        """Stop a specific agent drone"""
+        container_name = f"ollama-flow-drone-{drone_id}"
         
         if container_name in self.containers:
             container = self.containers[container_name]
-            logger.info(f"Stopping worker {worker_id}...")
+            logger.info(f"Stopping drone {drone_id}...")
             container.stop(timeout=30)
             container.remove()
             del self.containers[container_name]
-            logger.info(f"Worker {worker_id} stopped and removed")
+            logger.info(f"Drone {drone_id} stopped and removed")
     
     async def stop_all(self):
         """Stop all managed containers"""
@@ -482,10 +482,10 @@ async def main():
             await manager.create_network()
             await manager.start_redis()
             await manager.start_main_app()
-            await manager.start_agent_workers()
+            await manager.start_agent_drones()
         
         if args.scale is not None:
-            await manager.scale_workers(args.scale)
+            await manager.scale_drones(args.scale)
         
         if args.logs:
             logs = manager.get_container_logs(args.logs)

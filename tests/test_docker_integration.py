@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import components to test
 from docker_manager import DockerManager
-from agents.docker_agent_worker import DockerAgentWorker
+from agents.docker_drone_agent import DockerDroneAgent
 from enhanced_framework import EnhancedOllamaFlow, DOCKER_AVAILABLE
 
 class TestDockerManager:
@@ -80,50 +80,50 @@ class TestDockerManager:
             result = await docker_manager.start_redis()
             assert result == mock_container
     
-    async def test_worker_scaling(self, docker_manager):
-        """Test agent worker scaling"""
-        with patch.object(docker_manager, '_start_agent_worker') as mock_start:
+    async def test_drone_scaling(self, docker_manager):
+        """Test agent drone scaling"""
+        with patch.object(docker_manager, '_start_agent_drone') as mock_start:
             mock_start.return_value = Mock()
             
-            workers = await docker_manager.start_agent_workers(count=3)
-            assert len(workers) == 3
+            drones = await docker_manager.start_agent_drones(count=3)
+            assert len(drones) == 3
             assert mock_start.call_count == 3
 
-class TestDockerAgentWorker:
-    """Test Docker Agent Worker functionality"""
+class TestDockerDroneAgent:
+    """Test Docker Drone Agent functionality"""
     
     @pytest.fixture
     def mock_db_manager(self):
         """Create mock database manager"""
         db_manager = Mock()
         db_manager.test_connection.return_value = True
-        db_manager.get_worker_tasks.return_value = []
+        db_manager.get_drone_tasks.return_value = []
         return db_manager
     
     @pytest.fixture
-    def docker_worker(self):
-        """Create DockerAgentWorker instance"""
-        with patch.dict(os.environ, {'WORKER_ID': '1', 'REDIS_HOST': 'localhost'}):
-            return DockerAgentWorker(worker_id=1)
+    def docker_drone(self):
+        """Create DockerDroneAgent instance"""
+        with patch.dict(os.environ, {'DRONE_ID': '1', 'REDIS_HOST': 'localhost'}):
+            return DockerDroneAgent(drone_id=1)
     
-    async def test_worker_initialization(self, docker_worker, mock_db_manager):
-        """Test worker initialization"""
-        with patch.object(docker_worker, '_wait_for_redis'):
-            with patch('agents.docker_agent_worker.EnhancedDBManager', return_value=mock_db_manager):
-                with patch('agents.docker_agent_worker.DroneAgent') as mock_agent:
+    async def test_drone_initialization(self, docker_drone, mock_db_manager):
+        """Test drone initialization"""
+        with patch.object(docker_drone, '_wait_for_redis'):
+            with patch('agents.docker_drone_agent.EnhancedDBManager', return_value=mock_db_manager):
+                with patch('agents.docker_drone_agent.DroneAgent') as mock_agent:
                     mock_agent_instance = Mock()
                     mock_agent.return_value = mock_agent_instance
                     
-                    await docker_worker.initialize()
+                    await docker_drone.initialize()
                     
-                    assert docker_worker.db_manager == mock_db_manager
-                    assert docker_worker.agent == mock_agent_instance
+                    assert docker_drone.db_manager == mock_db_manager
+                    assert docker_drone.agent == mock_agent_instance
     
-    async def test_worker_task_processing(self, docker_worker, mock_db_manager):
-        """Test worker task processing"""
-        # Setup worker
-        docker_worker.db_manager = mock_db_manager
-        docker_worker.agent = Mock()
+    async def test_drone_task_processing(self, docker_drone, mock_db_manager):
+        """Test drone task processing"""
+        # Setup drone
+        docker_drone.db_manager = mock_db_manager
+        docker_drone.agent = Mock()
         
         # Mock task
         test_task = {
@@ -132,32 +132,32 @@ class TestDockerAgentWorker:
             'data': {'subtask': 'Test task', 'context': {}}
         }
         
-        mock_db_manager.get_worker_tasks.return_value = [test_task]
+        mock_db_manager.get_drone_tasks.return_value = [test_task]
         
         # Test task execution
-        await docker_worker._process_assigned_tasks()
+        await docker_drone._process_assigned_tasks()
         
         # Verify task was processed
-        docker_worker.agent.process_task.assert_called_once()
+        docker_drone.agent.process_task.assert_called_once()
     
-    async def test_worker_heartbeat(self, docker_worker, mock_db_manager):
-        """Test worker heartbeat functionality"""
-        docker_worker.db_manager = mock_db_manager
+    async def test_drone_heartbeat(self, docker_drone, mock_db_manager):
+        """Test drone heartbeat functionality"""
+        docker_drone.db_manager = mock_db_manager
         
-        await docker_worker._send_heartbeat()
+        await docker_drone._send_heartbeat()
         
-        mock_db_manager.store_worker_heartbeat.assert_called_once()
+        mock_db_manager.store_drone_heartbeat.assert_called_once()
     
-    async def test_worker_cleanup(self, docker_worker, mock_db_manager):
-        """Test worker cleanup"""
-        docker_worker.db_manager = mock_db_manager
-        docker_worker.agent = Mock()
-        docker_worker.agent.polling_task = Mock()
+    async def test_drone_cleanup(self, docker_drone, mock_db_manager):
+        """Test drone cleanup"""
+        docker_drone.db_manager = mock_db_manager
+        docker_drone.agent = Mock()
+        docker_drone.agent.polling_task = Mock()
         
-        await docker_worker._cleanup()
+        await docker_drone._cleanup()
         
-        mock_db_manager.update_worker_status.assert_called_once()
-        docker_worker.agent.polling_task.cancel.assert_called_once()
+        mock_db_manager.update_drone_status.assert_called_once()
+        docker_drone.agent.polling_task.cancel.assert_called_once()
 
 class TestDockerIntegration:
     """Test integration between Docker components and enhanced framework"""
@@ -210,7 +210,7 @@ class TestDockerIntegration:
         assert 'services' in compose_data
         assert 'redis' in compose_data['services']
         assert 'ollama-flow' in compose_data['services']
-        assert 'agent-worker-1' in compose_data['services']
+        assert 'agent-drone-1' in compose_data['services']
     
     async def test_dockerfile_exists_and_valid(self):
         """Test Dockerfile exists and has proper structure"""
@@ -253,14 +253,14 @@ class TestDockerEnvironment:
             'REDIS_PORT': '6380',
             'OLLAMA_HOST': 'test-ollama:11435',
             'DOCKER_MODE': 'true',
-            'WORKER_ID': '5'
+            'DRONE_ID': '5'
         }):
-            worker = DockerAgentWorker(worker_id=5)
+            drone = DockerDroneAgent(drone_id=5)
             
-            assert worker.redis_host == 'test-redis'
-            assert worker.redis_port == 6380
-            assert worker.ollama_host == 'test-ollama:11435'
-            assert worker.worker_id == 5
+            assert drone.redis_host == 'test-redis'
+            assert drone.redis_port == 6380
+            assert drone.ollama_host == 'test-ollama:11435'
+            assert drone.drone_id == 5
     
     def test_docker_healthcheck_script(self):
         """Test Docker health check functionality"""
@@ -273,8 +273,8 @@ class TestDockerPerformance:
     """Test Docker integration performance"""
     
     @pytest.mark.slow
-    async def test_multiple_worker_startup_time(self):
-        """Test performance of starting multiple workers"""
+    async def test_multiple_drone_startup_time(self):
+        """Test performance of starting multiple drones"""
         with patch('docker_manager.docker') as mock_docker:
             mock_client = Mock()
             mock_docker.from_env.return_value = mock_client
@@ -283,16 +283,16 @@ class TestDockerPerformance:
             await manager.initialize()
             
             start_time = asyncio.get_event_loop().time()
-            await manager.start_agent_workers(count=8)
+            await manager.start_agent_drones(count=8)
             end_time = asyncio.get_event_loop().time()
             
-            # Should start workers in reasonable time
+            # Should start drones in reasonable time
             startup_time = end_time - start_time
-            assert startup_time < 30  # 30 seconds max for 8 workers
+            assert startup_time < 30  # 30 seconds max for 8 drones
     
     @pytest.mark.slow
-    async def test_worker_task_throughput(self):
-        """Test worker task processing throughput"""
+    async def test_drone_task_throughput(self):
+        """Test drone task processing throughput"""
         # This would test actual task processing speed
         # Implementation depends on specific performance requirements
         pass

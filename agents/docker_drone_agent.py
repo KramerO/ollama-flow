@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Docker Agent Worker - Containerized AI Agent Execution
-Specialized worker for running agents in Docker containers
+Docker Drone Agent - Containerized AI Agent Execution
+Specialized drone for running agents in Docker containers
 """
 
 import os
@@ -31,12 +31,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class DockerAgentWorker:
-    """Docker-optimized agent worker for containerized execution"""
+class DockerDroneAgent:
+    """Docker-optimized drone agent for containerized execution"""
     
-    def __init__(self, worker_id: int = 1):
-        self.worker_id = worker_id
-        self.agent_id = f"docker_worker_{worker_id}"
+    def __init__(self, drone_id: int = 1):
+        self.drone_id = drone_id
+        self.agent_id = f"docker_drone_{drone_id}"
         self.shutdown_event = asyncio.Event()
         self.agent = None
         self.db_manager = None
@@ -46,12 +46,12 @@ class DockerAgentWorker:
         self.redis_port = int(os.getenv('REDIS_PORT', 6379))
         self.ollama_host = os.getenv('OLLAMA_HOST', 'localhost:11434')
         
-        logger.info(f"Docker Agent Worker {worker_id} initializing...")
+        logger.info(f"Docker Drone Agent {drone_id} initializing...")
         logger.info(f"Redis: {self.redis_host}:{self.redis_port}")
         logger.info(f"Ollama: {self.ollama_host}")
         
     async def initialize(self):
-        """Initialize the Docker agent worker"""
+        """Initialize the Docker drone agent"""
         try:
             # Initialize enhanced database manager with Redis connection
             self.db_manager = EnhancedDBManager(
@@ -63,15 +63,15 @@ class DockerAgentWorker:
             # Wait for Redis connection
             await self._wait_for_redis()
             
-            # Determine agent role based on worker ID
+            # Determine agent role based on drone ID
             roles = [DroneRole.ANALYST, DroneRole.DATA_SCIENTIST, 
                     DroneRole.IT_ARCHITECT, DroneRole.DEVELOPER]
-            role = roles[self.worker_id % len(roles)]
+            role = roles[self.drone_id % len(roles)]
             
             # Create specialized drone agent
             self.agent = DroneAgent(
                 agent_id=self.agent_id,
-                name=f"DockerWorker_{self.worker_id}_{role.value}",
+                name=f"DockerDrone_{self.drone_id}_{role.value}",
                 role=role,
                 model="phi3:mini"  # Light model for container efficiency
             )
@@ -81,11 +81,11 @@ class DockerAgentWorker:
             self.agent.docker_mode = True
             self.agent.ollama_host = self.ollama_host
             
-            logger.info(f"Docker Agent Worker {self.worker_id} initialized successfully")
+            logger.info(f"Docker Drone Agent {self.drone_id} initialized successfully")
             logger.info(f"Agent Role: {role.value}")
             
         except Exception as e:
-            logger.error(f"Failed to initialize Docker Agent Worker: {e}")
+            logger.error(f"Failed to initialize Docker Drone Agent: {e}")
             raise
     
     async def _wait_for_redis(self, max_retries: int = 30):
@@ -102,14 +102,14 @@ class DockerAgentWorker:
         raise Exception("Failed to connect to Redis after maximum retries")
     
     async def run(self):
-        """Main worker execution loop"""
+        """Main drone execution loop"""
         try:
             await self.initialize()
             
-            logger.info(f"Docker Agent Worker {self.worker_id} starting main loop...")
+            logger.info(f"Docker Drone Agent {self.drone_id} starting main loop...")
             
-            # Register worker as available
-            await self._register_worker()
+            # Register drone as available
+            await self._register_drone()
             
             # Main execution loop
             while not self.shutdown_event.is_set():
@@ -128,16 +128,16 @@ class DockerAgentWorker:
                     await asyncio.sleep(5)  # Wait longer on error
             
         except Exception as e:
-            logger.error(f"Fatal error in Docker Agent Worker: {e}")
+            logger.error(f"Fatal error in Docker Drone Agent: {e}")
             raise
         finally:
             await self._cleanup()
     
-    async def _register_worker(self):
-        """Register this worker as available in the database"""
+    async def _register_drone(self):
+        """Register this drone as available in the database"""
         try:
-            worker_info = {
-                'worker_id': self.worker_id,
+            drone_info = {
+                'drone_id': self.drone_id,
                 'agent_id': self.agent_id,
                 'role': self.agent.role.value if self.agent else 'unknown',
                 'status': 'available',
@@ -145,23 +145,23 @@ class DockerAgentWorker:
                 'last_seen': time.time()
             }
             
-            # Store worker registration in database
-            self.db_manager.store_worker_info(self.agent_id, worker_info)
-            logger.info(f"Worker {self.worker_id} registered successfully")
+            # Store drone registration in database
+            self.db_manager.store_drone_info(self.agent_id, drone_info)
+            logger.info(f"Drone {self.drone_id} registered successfully")
             
         except Exception as e:
-            logger.error(f"Failed to register worker: {e}")
+            logger.error(f"Failed to register drone: {e}")
     
     async def _process_assigned_tasks(self):
-        """Process any tasks assigned to this worker"""
+        """Process any tasks assigned to this drone"""
         try:
             # Check for direct messages to this agent
             if self.agent and hasattr(self.agent, '_message_polling_task'):
                 # Agent's built-in message processing handles this
                 pass
             
-            # Check for general worker tasks
-            tasks = self.db_manager.get_worker_tasks(self.agent_id)
+            # Check for general drone tasks
+            tasks = self.db_manager.get_drone_tasks(self.agent_id)
             for task in tasks:
                 await self._execute_task(task)
                 
@@ -169,7 +169,7 @@ class DockerAgentWorker:
             logger.error(f"Error processing assigned tasks: {e}")
     
     async def _execute_task(self, task: Dict[str, Any]):
-        """Execute a specific task assigned to this worker"""
+        """Execute a specific task assigned to this drone"""
         try:
             logger.info(f"Executing task: {task.get('id', 'unknown')}")
             
@@ -225,17 +225,17 @@ class DockerAgentWorker:
         logger.info(f"Code generated successfully for: {description[:50]}...")
     
     async def _send_heartbeat(self):
-        """Send heartbeat to indicate worker is alive"""
+        """Send heartbeat to indicate drone is alive"""
         try:
             heartbeat_data = {
-                'worker_id': self.worker_id,
+                'drone_id': self.drone_id,
                 'agent_id': self.agent_id,
                 'timestamp': time.time(),
                 'status': 'active',
                 'container_id': os.getenv('HOSTNAME', 'unknown')
             }
             
-            self.db_manager.store_worker_heartbeat(self.agent_id, heartbeat_data)
+            self.db_manager.store_drone_heartbeat(self.agent_id, heartbeat_data)
             
         except Exception as e:
             logger.error(f"Failed to send heartbeat: {e}")
@@ -243,11 +243,11 @@ class DockerAgentWorker:
     async def _cleanup(self):
         """Cleanup resources before shutdown"""
         try:
-            logger.info(f"Docker Agent Worker {self.worker_id} cleaning up...")
+            logger.info(f"Docker Drone Agent {self.drone_id} cleaning up...")
             
-            # Mark worker as shutting down
+            # Mark drone as shutting down
             if self.db_manager:
-                self.db_manager.update_worker_status(self.agent_id, 'shutting_down')
+                self.db_manager.update_drone_status(self.agent_id, 'shutting_down')
             
             # Stop agent polling if active
             if self.agent and hasattr(self.agent, 'polling_task'):
@@ -258,7 +258,7 @@ class DockerAgentWorker:
             if self.db_manager:
                 await self.db_manager.close()
             
-            logger.info(f"Docker Agent Worker {self.worker_id} cleanup completed")
+            logger.info(f"Docker Drone Agent {self.drone_id} cleanup completed")
             
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
@@ -269,19 +269,19 @@ class DockerAgentWorker:
         self.shutdown_event.set()
 
 async def main():
-    """Main entry point for Docker Agent Worker"""
-    # Get worker ID from environment
-    worker_id = int(os.getenv('WORKER_ID', 1))
+    """Main entry point for Docker Drone Agent"""
+    # Get drone ID from environment
+    drone_id = int(os.getenv('DRONE_ID', 1))
     
-    # Create and run worker
-    worker = DockerAgentWorker(worker_id)
+    # Create and run drone
+    drone = DockerDroneAgent(drone_id)
     
     # Setup signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, worker.handle_shutdown)
-    signal.signal(signal.SIGTERM, worker.handle_shutdown)
+    signal.signal(signal.SIGINT, drone.handle_shutdown)
+    signal.signal(signal.SIGTERM, drone.handle_shutdown)
     
     try:
-        await worker.run()
+        await drone.run()
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
     except Exception as e:
@@ -289,5 +289,5 @@ async def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    # Run the worker
+    # Run the drone
     asyncio.run(main())

@@ -47,47 +47,47 @@ services:
       - ollama-flow-net
     restart: unless-stopped
 
-  # Agent worker containers - scalable
-  agent-worker-1:
+  # Agent drone containers - scalable
+  agent-drone-1:
     build: .
-    container_name: ollama-flow-worker-1
+    container_name: ollama-flow-drone-1
     environment:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - OLLAMA_HOST=host.docker.internal:11434
       - DOCKER_MODE=true
-      - AGENT_MODE=worker
-      - WORKER_ID=1
+      - AGENT_MODE=drone
+      - DRONE_ID=1
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
-    command: ["python3", "agents/docker_agent_worker.py"]
+    command: ["python3", "agents/docker_drone_agent.py"]
     networks:
       - ollama-flow-net
     restart: unless-stopped
 
-  agent-worker-2:
+  agent-drone-2:
     build: .
-    container_name: ollama-flow-worker-2
+    container_name: ollama-flow-drone-2
     environment:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - OLLAMA_HOST=host.docker.internal:11434
       - DOCKER_MODE=true
-      - AGENT_MODE=worker
-      - WORKER_ID=2
+      - AGENT_MODE=drone
+      - DRONE_ID=2
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
-    command: ["python3", "agents/docker_agent_worker.py"]
+    command: ["python3", "agents/docker_drone_agent.py"]
     networks:
       - ollama-flow-net
     restart: unless-stopped

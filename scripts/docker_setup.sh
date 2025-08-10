@@ -190,42 +190,42 @@ show_logs() {
     docker compose -f $compose_file logs -f $service
 }
 
-scale_workers() {
+scale_drones() {
     local count=$1
     local compose_file=$2
     
     if [ -z "$count" ] || ! [[ "$count" =~ ^[0-9]+$ ]]; then
-        log_error "Please provide a valid worker count"
+        log_error "Please provide a valid drone count"
         exit 1
     fi
     
-    log_info "Scaling agent workers to $count instances..."
+    log_info "Scaling agent drones to $count instances..."
     
-    # Use docker compose to scale workers
-    # Note: This creates additional worker services dynamically
+    # Use docker compose to scale drones
+    # Note: This creates additional drone services dynamically
     for i in $(seq 1 $count); do
-        service_name="agent-worker-$i"
+        service_name="agent-drone-$i"
         if [ $i -gt 2 ]; then
-            # Create additional workers beyond the default 2
-            log_info "Starting additional worker: $service_name"
+            # Create additional drones beyond the default 2
+            log_info "Starting additional drone: $service_name"
             docker run -d \
-                --name "ollama-flow-worker-$i" \
+                --name "ollama-flow-drone-$i" \
                 --network $NETWORK_NAME \
                 -e PYTHONUNBUFFERED=1 \
                 -e REDIS_HOST=redis \
                 -e REDIS_PORT=6379 \
                 -e OLLAMA_HOST=host.docker.internal:11434 \
                 -e DOCKER_MODE=true \
-                -e AGENT_MODE=worker \
-                -e WORKER_ID=$i \
+                -e AGENT_MODE=drone \
+                -e DRONE_ID=$i \
                 -v ollama-flow-data:/app/data \
                 -v ollama-flow-logs:/app/logs \
                 ${IMAGE_NAME}:latest \
-                python3 agents/docker_agent_worker.py
+                python3 agents/docker_drone_agent.py
         fi
     done
     
-    log_success "Scaled to $count workers"
+    log_success "Scaled to $count drones"
 }
 
 health_check() {
@@ -269,7 +269,7 @@ show_usage() {
     echo "  stop           - Stop services"
     echo "  restart        - Restart services"
     echo "  logs [service] - Show logs for a service (or list services if none specified)"
-    echo "  scale <count>  - Scale agent workers to specified count"
+    echo "  scale <count>  - Scale agent drones to specified count"
     echo "  health         - Check service health status"
     echo "  cleanup        - Clean up all Docker resources"
     echo "  test           - Run Docker integration tests"
@@ -279,7 +279,7 @@ show_usage() {
     echo "  $0 start                 # Start production environment"
     echo "  $0 start-dev            # Start development environment"
     echo "  $0 logs ollama-flow     # Show main app logs"
-    echo "  $0 scale 8              # Scale to 8 agent workers"
+    echo "  $0 scale 8              # Scale to 8 agent drones"
     echo "  $0 health               # Check all service health"
 }
 
@@ -318,7 +318,7 @@ case "$1" in
         show_logs "$2" $COMPOSE_FILE
         ;;
     scale)
-        scale_workers "$2" $COMPOSE_FILE
+        scale_drones "$2" $COMPOSE_FILE
         ;;
     health)
         health_check $COMPOSE_FILE
