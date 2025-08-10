@@ -49,6 +49,12 @@ EXAMPLES:
   ollama-flow run "Create ML model for image recognition"  # Auto: Data Scientist
   ollama-flow run "write python hello world"               # Auto: Developer
   
+  # Auto-Scaling Examples (NEW!)
+  ollama-flow run "Build complex web application" --auto-scaling --strategy HYBRID
+  ollama-flow run "Create ML pipeline" --auto-scaling --strategy GPU_MEMORY_BASED  
+  ollama-flow run "Process large dataset" --auto-scaling --strategy AGGRESSIVE --min-agents 2
+  ollama-flow run "Production task" --auto-scaling --strategy CONSERVATIVE --docker
+  
   # Model configuration
   ollama-flow models list                                   # Show available models
   ollama-flow models config developer:codellama:7b        # Set role-specific model
@@ -68,6 +74,14 @@ RUN OPTIONS:
   --interactive          Interactive mode
   --metrics              Enable performance metrics
   --benchmark            Benchmark mode
+  
+AUTO-SCALING OPTIONS (NEW):
+  --auto-scaling         Enable GPU-based auto-scaling system
+  --strategy TYPE        Scaling strategy: GPU_MEMORY_BASED, WORKLOAD_BASED, 
+                        HYBRID, CONSERVATIVE, AGGRESSIVE (default: HYBRID)
+  --min-agents N         Minimum number of agents (default: 1)
+  --max-agents N         Maximum number of agents (auto-calculated if not set)
+  --docker               Enable Docker container mode for agents
 
 🆕 NEW v2.6.0 FEATURES:
   • Dynamic Role Assignment: Agents automatically choose optimal role per task
@@ -75,6 +89,8 @@ RUN OPTIONS:
   • Smart Agent Selection: Intelligent task analysis for perfect role matching
   • 90% Role Assignment Accuracy: Highly accurate automatic role detection
   • Task-Based Intelligence: Developer, Analyst, Security, IT Architect, Data Scientist
+  • GPU-Based Auto-Scaling: Dynamically scales agents based on available GPU memory
+  • Workload-Aware Scaling: Intelligent scaling based on task queues and system load
 
 DASHBOARD OPTIONS:
   --host HOST            Dashboard host (default: 127.0.0.1)
@@ -165,6 +181,14 @@ def run_enhanced_main(args):
             cmd.extend(["--arch", args.arch])
         if not args.interactive:  # Enhanced framework has auto-shutdown by default
             cmd.append("--no-auto-shutdown")
+        
+        # Auto-scaling parameters
+        if hasattr(args, 'auto_scaling') and args.auto_scaling:
+            cmd.append("--auto-scaling")
+        if hasattr(args, 'strategy') and args.strategy:
+            cmd.extend(["--scaling-strategy", args.strategy])
+        if hasattr(args, 'docker') and args.docker:
+            cmd.append("--docker")
     else:
         # Legacy main.py parameters - map CLI args to main.py expected parameters
         if args.task:
@@ -718,6 +742,14 @@ def main():
     run_parser.add_argument('--benchmark', action='store_true', help='Benchmark mode')
     run_parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                            default='INFO', help='Log level')
+    
+    # Auto-scaling parameters
+    run_parser.add_argument('--auto-scaling', action='store_true', help='Enable auto-scaling system')
+    run_parser.add_argument('--strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'],
+                           default='HYBRID', help='Auto-scaling strategy (default: HYBRID)')
+    run_parser.add_argument('--min-agents', type=int, help='Minimum number of agents')
+    run_parser.add_argument('--max-agents', type=int, help='Maximum number of agents')
+    run_parser.add_argument('--docker', action='store_true', help='Enable Docker container mode')
     
     # Dashboard command
     dashboard_parser = subparsers.add_parser('dashboard', help='Launch web dashboard')

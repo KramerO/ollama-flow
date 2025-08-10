@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+"""
+Ollama Flow Auto-Scaling CLI Tool
+Dedicated command-line interface for auto-scaling functionality
+"""
+
+import argparse
+import asyncio
+import json
+import sys
+import os
+from pathlib import Path
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from enhanced_framework import EnhancedOllamaFlow
+from auto_scaling_engine import ScalingStrategy
+
+def create_autoscaling_parser():
+    """Create command line parser for auto-scaling"""
+    parser = argparse.ArgumentParser(
+        description="Ollama Flow Auto-Scaling System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Auto-Scaling Examples:
+  %(prog)s run "Build a web application" --strategy HYBRID
+  %(prog)s run "Create ML model" --strategy GPU_MEMORY_BASED --model llama3:8b
+  %(prog)s interactive --strategy AGGRESSIVE --min-agents 2 --max-agents 8
+  %(prog)s status --show-gpu --show-agents
+  %(prog)s config --strategy CONSERVATIVE --gpu-threshold 0.8
+  
+Scaling Strategies:
+  GPU_MEMORY_BASED  - Scale based on available GPU memory (best for memory-constrained systems)
+  WORKLOAD_BASED    - Scale based on task queue and agent utilization (best for queue-heavy workloads)
+  HYBRID           - Combine GPU and workload metrics (recommended for balanced systems)
+  CONSERVATIVE     - Cautious scaling decisions (best for production environments)
+  AGGRESSIVE       - Proactive scaling decisions (best for development/testing)
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Auto-scaling commands')
+    
+    # Run command with auto-scaling
+    run_parser = subparsers.add_parser('run', help='Run task with auto-scaling')
+    run_parser.add_argument('task', help='Task description')
+    run_parser.add_argument('--strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'],
+                           default='HYBRID', help='Scaling strategy (default: HYBRID)')
+    run_parser.add_argument('--model', default='phi3:mini', help='Base model to use (default: phi3:mini)')
+    run_parser.add_argument('--min-agents', type=int, default=1, help='Minimum number of agents (default: 1)')
+    run_parser.add_argument('--max-agents', type=int, help='Maximum number of agents (auto-calculated if not set)')
+    run_parser.add_argument('--project-folder', default='.', help='Project folder path')
+    run_parser.add_argument('--docker', action='store_true', help='Enable Docker container mode')
+    run_parser.add_argument('--gpu-threshold', type=float, help='GPU memory threshold for scaling (0.0-1.0)')
+    run_parser.add_argument('--cooldown', type=int, help='Cooldown period between scaling actions (seconds)')
+    run_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    
+    # Interactive mode
+    interactive_parser = subparsers.add_parser('interactive', help='Interactive mode with auto-scaling')
+    interactive_parser.add_argument('--strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'],
+                                   default='HYBRID', help='Scaling strategy (default: HYBRID)')
+    interactive_parser.add_argument('--model', default='phi3:mini', help='Base model to use (default: phi3:mini)')
+    interactive_parser.add_argument('--min-agents', type=int, default=1, help='Minimum number of agents')
+    interactive_parser.add_argument('--max-agents', type=int, help='Maximum number of agents (auto-calculated if not set)')
+    interactive_parser.add_argument('--project-folder', default='.', help='Project folder path')
+    interactive_parser.add_argument('--docker', action='store_true', help='Enable Docker container mode')
+    interactive_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    
+    # Status command
+    status_parser = subparsers.add_parser('status', help='Show auto-scaling system status')
+    status_parser.add_argument('--show-gpu', action='store_true', help='Show detailed GPU information')
+    status_parser.add_argument('--show-agents', action='store_true', help='Show detailed agent information')
+    status_parser.add_argument('--show-metrics', action='store_true', help='Show workload metrics')
+    status_parser.add_argument('--show-recommendations', action='store_true', help='Show scaling recommendations')
+    status_parser.add_argument('--json', action='store_true', help='Output in JSON format')
+    
+    # Config command
+    config_parser = subparsers.add_parser('config', help='Configure auto-scaling parameters')
+    config_parser.add_argument('--strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'],
+                              help='Set default scaling strategy')
+    config_parser.add_argument('--model', help='Set default model')
+    config_parser.add_argument('--min-agents', type=int, help='Set minimum agents')
+    config_parser.add_argument('--max-agents', type=int, help='Set maximum agents')
+    config_parser.add_argument('--gpu-threshold', type=float, help='Set GPU memory threshold (0.0-1.0)')
+    config_parser.add_argument('--cooldown', type=int, help='Set cooldown period (seconds)')
+    config_parser.add_argument('--environment', choices=['development', 'testing', 'production'],
+                              help='Load environment-specific configuration')
+    config_parser.add_argument('--save', help='Save configuration to file')
+    config_parser.add_argument('--load', help='Load configuration from file')
+    config_parser.add_argument('--reset', action='store_true', help='Reset to default configuration')
+    
+    # Test command
+    test_parser = subparsers.add_parser('test', help='Test auto-scaling functionality')
+    test_parser.add_argument('--gpu-detection', action='store_true', help='Test GPU detection')
+    test_parser.add_argument('--scaling-logic', action='store_true', help='Test scaling decision logic')
+    test_parser.add_argument('--agent-lifecycle', action='store_true', help='Test agent lifecycle management')
+    test_parser.add_argument('--all', action='store_true', help='Run all tests')
+    
+    return parser
+
+async def run_with_autoscaling(args):
+    """Run task with auto-scaling enabled"""
+    if args.debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+    
+    print(f"🚀 Starting Auto-Scaling System with strategy: {args.strategy}")
+    
+    # Create system with auto-scaling
+    system = EnhancedOllamaFlow(
+        project_folder=args.project_folder,
+        model=args.model,
+        auto_scaling=True,
+        scaling_strategy=args.strategy,
+        docker_mode=args.docker
+    )
+    
+    # Apply custom configuration if provided
+    await system.initialize()
+    
+    if system.auto_scaling_engine:
+        # Configure min/max agents
+        if args.min_agents:
+            system.auto_scaling_engine.config['min_agents'] = args.min_agents
+        if args.max_agents:
+            system.auto_scaling_engine.config['max_agents'] = args.max_agents
+        
+        # Configure GPU threshold
+        if args.gpu_threshold:
+            system.auto_scaling_engine.gpu_scaler.scaling_config['scale_up_threshold'] = args.gpu_threshold
+        
+        # Configure cooldown
+        if args.cooldown:
+            system.auto_scaling_engine.config['cooldown_period'] = args.cooldown
+        
+        print(f"⚙️ Configuration:")
+        print(f"   Strategy: {args.strategy}")
+        print(f"   Model: {args.model}")
+        print(f"   Min Agents: {system.auto_scaling_engine.config['min_agents']}")
+        print(f"   Max Agents: {system.auto_scaling_engine.config['max_agents']}")
+        
+        # Show initial recommendations
+        recommendations = system.auto_scaling_engine.get_recommendations()
+        print(f"\n🎯 Initial Recommendations:")
+        print(f"   Current Agents: {recommendations['current_agents']}")
+        print(f"   Recommended Action: {recommendations['recommended_action']}")
+        print(f"   Recommended Count: {recommendations['recommended_count']}")
+        print(f"   Reason: {recommendations['reason']}")
+    
+    print(f"\n🎯 Processing task: {args.task}")
+    
+    # Process task
+    result = await system.process_task(args.task)
+    
+    print(f"\n✅ Task completed successfully!")
+    print(f"📄 Result: {result[:200]}..." if len(result) > 200 else f"📄 Result: {result}")
+    
+    # Show final status
+    if system.auto_scaling_engine:
+        final_status = system.auto_scaling_engine.get_scaling_status()
+        print(f"\n📊 Final Status:")
+        print(f"   Active Agents: {final_status['active_agents']}")
+        
+        if final_status['recent_scaling_events']:
+            print(f"   Recent Scaling Events:")
+            for event in final_status['recent_scaling_events'][-3:]:  # Last 3 events
+                print(f"     - {event['action']}: {event['from_count']}→{event['to_count']} ({event['reason'][:50]}...)")
+
+async def interactive_with_autoscaling(args):
+    """Interactive mode with auto-scaling"""
+    if args.debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+    
+    print(f"🎮 Starting Interactive Auto-Scaling Mode")
+    print(f"📊 Strategy: {args.strategy}")
+    print(f"🤖 Model: {args.model}")
+    
+    system = EnhancedOllamaFlow(
+        project_folder=args.project_folder,
+        model=args.model,
+        auto_scaling=True,
+        scaling_strategy=args.strategy,
+        docker_mode=args.docker,
+        auto_shutdown=False  # Keep running in interactive mode
+    )
+    
+    await system.initialize()
+    
+    # Configure system
+    if system.auto_scaling_engine:
+        if args.min_agents:
+            system.auto_scaling_engine.config['min_agents'] = args.min_agents
+        if args.max_agents:
+            system.auto_scaling_engine.config['max_agents'] = args.max_agents
+    
+    # Start interactive mode
+    print("\n" + "="*60)
+    print("🎯 Auto-Scaling Interactive Mode")
+    print("Commands:")
+    print("  - Enter task description to process")
+    print("  - 'status' - Show current auto-scaling status")
+    print("  - 'agents' - List active agents")
+    print("  - 'config' - Show current configuration")
+    print("  - 'strategy <name>' - Change scaling strategy")
+    print("  - 'quit' - Exit")
+    print("="*60)
+    
+    try:
+        while True:
+            command = input("\n🎯 Enter command or task: ").strip()
+            
+            if command.lower() in ['quit', 'exit', 'q']:
+                break
+            elif command.lower() == 'status':
+                await show_status(system, show_all=True)
+            elif command.lower() == 'agents':
+                await show_agents(system)
+            elif command.lower() == 'config':
+                await show_config(system)
+            elif command.lower().startswith('strategy '):
+                strategy_name = command.split(' ', 1)[1].upper()
+                if hasattr(ScalingStrategy, strategy_name):
+                    strategy = getattr(ScalingStrategy, strategy_name)
+                    system.auto_scaling_engine.update_strategy(strategy)
+                    print(f"✅ Strategy changed to: {strategy_name}")
+                else:
+                    print(f"❌ Unknown strategy: {strategy_name}")
+                    print("Available strategies: GPU_MEMORY_BASED, WORKLOAD_BASED, HYBRID, CONSERVATIVE, AGGRESSIVE")
+            elif command:
+                print(f"\n🎯 Processing: {command}")
+                result = await system.process_task(command)
+                print(f"✅ Result: {result[:150]}..." if len(result) > 150 else f"✅ Result: {result}")
+    except KeyboardInterrupt:
+        pass
+    
+    print("\n👋 Shutting down auto-scaling system...")
+
+async def show_status(system=None, show_all=False):
+    """Show auto-scaling status"""
+    if not system:
+        print("⚠️ No active auto-scaling system")
+        return
+    
+    print(f"\n📊 Auto-Scaling Status:")
+    
+    if system.auto_scaling_engine:
+        status = system.auto_scaling_engine.get_scaling_status()
+        print(f"   Strategy: {status['strategy']}")
+        print(f"   Active Agents: {status['active_agents']}")
+        print(f"   Model: {status['current_model']}")
+        print(f"   Running: {status['running']}")
+        
+        if show_all and status['gpu_status']:
+            gpu = status['gpu_status']
+            print(f"\n🎮 GPU Status:")
+            print(f"   Total Memory: {gpu.get('total_memory_mb', 0)}MB")
+            print(f"   Available Memory: {gpu.get('available_memory_mb', 0)}MB")
+            print(f"   GPU Utilization: {gpu.get('average_gpu_utilization', 0):.1f}%")
+            print(f"   Memory Utilization: {gpu.get('average_memory_utilization', 0):.1f}%")
+            print(f"   Max Agents: {gpu.get('max_agents', 0)}")
+        
+        if status['recent_scaling_events']:
+            print(f"\n🔄 Recent Scaling Events:")
+            for event in status['recent_scaling_events'][-5:]:
+                success_icon = "✅" if event['success'] else "❌"
+                print(f"     {success_icon} {event['action']}: {event['from_count']}→{event['to_count']}")
+                print(f"        Reason: {event['reason'][:60]}...")
+
+async def show_agents(system):
+    """Show active agents"""
+    if not system or not system.dynamic_agent_manager:
+        print("⚠️ No active agent manager")
+        return
+    
+    status = system.dynamic_agent_manager.get_detailed_status()
+    print(f"\n🤖 Active Agents ({status['active_agents']}):")
+    
+    if status['role_distribution']:
+        print(f"   Role Distribution:")
+        for role, count in status['role_distribution'].items():
+            print(f"     - {role}: {count}")
+    
+    if status['state_distribution']:
+        print(f"   State Distribution:")
+        for state, count in status['state_distribution'].items():
+            print(f"     - {state}: {count}")
+    
+    print(f"   Queue Status:")
+    print(f"     - Creation Queue: {status['creation_queue_size']}")
+    print(f"     - Termination Queue: {status['termination_queue_size']}")
+
+async def show_config(system):
+    """Show current configuration"""
+    if not system or not system.auto_scaling_engine:
+        print("⚠️ No active auto-scaling engine")
+        return
+    
+    print(f"\n⚙️ Auto-Scaling Configuration:")
+    config = system.auto_scaling_engine.config
+    print(f"   Min Agents: {config['min_agents']}")
+    print(f"   Max Agents: {config['max_agents']}")
+    print(f"   Check Interval: {config['scaling_check_interval']}s")
+    print(f"   Cooldown Period: {config['cooldown_period']}s")
+    
+    if system.auto_scaling_engine.gpu_scaler:
+        gpu_config = system.auto_scaling_engine.gpu_scaler.scaling_config
+        print(f"\n🎮 GPU Scaling Configuration:")
+        print(f"   Scale Up Threshold: {gpu_config['scale_up_threshold']:.1%}")
+        print(f"   Scale Down Threshold: {gpu_config['scale_down_threshold']:.1%}")
+        print(f"   Memory Safety Margin: {gpu_config['memory_safety_margin']:.1%}")
+        print(f"   Memory Buffer: {gpu_config['memory_buffer_mb']}MB")
+
+async def run_tests(args):
+    """Run auto-scaling tests"""
+    print("🧪 Running Auto-Scaling Tests...")
+    
+    if args.all or args.gpu_detection:
+        print("\n📊 Testing GPU Detection...")
+        try:
+            from gpu_autoscaler import GPUMonitor
+            monitor = GPUMonitor()
+            vendor = monitor._detect_gpu_vendor()
+            print(f"✅ GPU Vendor: {vendor.value}")
+            
+            # Test model requirements
+            phi3_req = monitor.model_requirements.get("phi3:mini")
+            if phi3_req:
+                print(f"✅ Model Requirements: phi3:mini needs {phi3_req.recommended_memory_mb}MB")
+            
+        except Exception as e:
+            print(f"❌ GPU detection test failed: {e}")
+    
+    if args.all or args.scaling_logic:
+        print("\n🔄 Testing Scaling Logic...")
+        try:
+            from gpu_autoscaler import GPUAutoScaler
+            scaler = GPUAutoScaler("phi3:mini")
+            
+            decision = scaler._make_scaling_decision(
+                available_memory=8192,
+                total_memory=16384,
+                memory_util=60.0,
+                gpu_util=50.0
+            )
+            print(f"✅ Scaling Decision: {decision['action']} - {decision['reason']}")
+            
+        except Exception as e:
+            print(f"❌ Scaling logic test failed: {e}")
+    
+    if args.all or args.agent_lifecycle:
+        print("\n🤖 Testing Agent Lifecycle...")
+        try:
+            from dynamic_agent_manager import DynamicAgentManager
+            from agents.drone_agent import DroneRole
+            
+            manager = DynamicAgentManager()
+            print("✅ Dynamic Agent Manager initialized")
+            
+            # Test queue operations
+            manager.queue_agent_creation(DroneRole.DEVELOPER, "phi3:mini", "test")
+            print(f"✅ Agent creation queued: {len(manager.creation_queue)} in queue")
+            
+        except Exception as e:
+            print(f"❌ Agent lifecycle test failed: {e}")
+    
+    print("\n🎉 Tests completed!")
+
+async def main():
+    """Main CLI entry point"""
+    parser = create_autoscaling_parser()
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return
+    
+    try:
+        if args.command == 'run':
+            await run_with_autoscaling(args)
+        elif args.command == 'interactive':
+            await interactive_with_autoscaling(args)
+        elif args.command == 'status':
+            print("⚠️ Status command requires an active system. Use 'run' or 'interactive' mode first.")
+        elif args.command == 'config':
+            print("⚠️ Config command not yet implemented. Use CLI arguments for now.")
+        elif args.command == 'test':
+            await run_tests(args)
+        else:
+            print(f"❌ Unknown command: {args.command}")
+            parser.print_help()
+    
+    except KeyboardInterrupt:
+        print("\n👋 Interrupted by user")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        if args.debug if hasattr(args, 'debug') else False:
+            import traceback
+            traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main())

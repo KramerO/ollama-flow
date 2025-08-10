@@ -35,6 +35,19 @@ except ImportError:
     DOCKER_AVAILABLE = False
     DockerManager = None
 
+# Import Auto-Scaling components
+try:
+    from auto_scaling_engine import AutoScalingEngine, ScalingStrategy
+    from dynamic_agent_manager import DynamicAgentManager
+    from gpu_autoscaler import GPUAutoScaler
+    from workload_metrics import get_metrics_collector
+    AUTO_SCALING_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Auto-scaling components not available: {e}")
+    AUTO_SCALING_AVAILABLE = False
+    AutoScalingEngine = None
+    DynamicAgentManager = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +68,9 @@ class EnhancedOllamaFlow:
                  drone_count: int = 4,
                  architecture: str = "HIERARCHICAL",
                  auto_shutdown: bool = True,
-                 docker_mode: bool = False):
+                 docker_mode: bool = False,
+                 auto_scaling: bool = False,
+                 scaling_strategy: str = "GPU_MEMORY_BASED"):
         
         self.project_folder = Path(project_folder).resolve()
         self.model = model
@@ -63,6 +78,8 @@ class EnhancedOllamaFlow:
         self.architecture = architecture
         self.auto_shutdown = auto_shutdown
         self.docker_mode = docker_mode
+        self.auto_scaling = auto_scaling
+        self.scaling_strategy = scaling_strategy
         
         # Enhanced database manager
         self.db_manager = None
@@ -79,6 +96,20 @@ class EnhancedOllamaFlow:
             logger.warning("🐳 Docker mode requested but Docker not available. Falling back to local execution.")
             self.docker_mode = False
         
+        # Auto-Scaling components
+        self.auto_scaling_engine = None
+        self.dynamic_agent_manager = None
+        self.metrics_collector = None
+        
+        if self.auto_scaling and AUTO_SCALING_AVAILABLE:
+            strategy_enum = getattr(ScalingStrategy, scaling_strategy.upper(), ScalingStrategy.GPU_MEMORY_BASED)
+            self.auto_scaling_engine = AutoScalingEngine(strategy=strategy_enum, model=model)
+            self.dynamic_agent_manager = DynamicAgentManager()
+            self.metrics_collector = get_metrics_collector()
+        elif self.auto_scaling and not AUTO_SCALING_AVAILABLE:
+            logger.warning("🔄 Auto-scaling requested but components not available. Disabling auto-scaling.")
+            self.auto_scaling = False
+        
         # Setup signal handlers for graceful shutdown
         self._setup_signal_handlers()
         
@@ -88,6 +119,7 @@ class EnhancedOllamaFlow:
         logger.info(f"🔧 Architecture: {self.architecture}")
         logger.info(f"⚡ Auto-shutdown: {self.auto_shutdown}")
         logger.info(f"🐳 Docker mode: {self.docker_mode}")
+        logger.info(f"🔄 Auto-scaling: {self.auto_scaling} (strategy: {scaling_strategy})")
     
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
@@ -115,6 +147,10 @@ class EnhancedOllamaFlow:
             # Create project folder if it doesn't exist
             self.project_folder.mkdir(parents=True, exist_ok=True)
             
+            # Initialize auto-scaling components if enabled
+            if self.auto_scaling:
+                await self._initialize_auto_scaling()
+            
             # Initialize agents based on architecture
             await self._initialize_agents()
             
@@ -123,6 +159,39 @@ class EnhancedOllamaFlow:
         except Exception as e:
             logger.error(f"❌ Initialization failed: {e}")
             raise
+    
+    async def _initialize_auto_scaling(self):
+        """Initialize auto-scaling components"""
+        try:
+            logger.info("🔄 Initializing auto-scaling system...")
+            
+            # Setup Dynamic Agent Manager
+            self.dynamic_agent_manager.set_orchestrator(self.orchestrator)
+            self.dynamic_agent_manager.set_db_manager(self.db_manager)
+            
+            # Setup Auto-Scaling Engine callbacks
+            self.auto_scaling_engine.set_callbacks(
+                creation_callback=self.dynamic_agent_manager.autoscaling_create_agent,
+                termination_callback=self.dynamic_agent_manager.autoscaling_terminate_agent,
+                notification_callback=self._handle_scaling_notification
+            )
+            
+            self.auto_scaling_engine.set_database_manager(self.db_manager)
+            
+            # Start components
+            await self.dynamic_agent_manager.start()
+            await self.auto_scaling_engine.start()
+            
+            logger.info(f"✅ Auto-scaling initialized with {self.scaling_strategy} strategy")
+            
+        except Exception as e:
+            logger.error(f"❌ Auto-scaling initialization failed: {e}")
+            # Don't raise - continue without auto-scaling
+            self.auto_scaling = False
+    
+    async def _handle_scaling_notification(self, event):
+        """Handle scaling notifications"""
+        logger.info(f"🔄 Scaling event: {event.action} ({event.from_count}→{event.to_count}) - {event.reason}")
     
     async def _initialize_agents(self):
         """Initialize agents based on selected architecture"""
@@ -301,6 +370,20 @@ class EnhancedOllamaFlow:
         try:
             logger.info("🛑 Starting graceful shutdown...")
             
+            # Stop auto-scaling components first
+            if self.auto_scaling:
+                try:
+                    if self.auto_scaling_engine:
+                        await self.auto_scaling_engine.stop()
+                        logger.info("✅ Auto-scaling engine stopped")
+                    
+                    if self.dynamic_agent_manager:
+                        await self.dynamic_agent_manager.stop()
+                        logger.info("✅ Dynamic agent manager stopped")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Error stopping auto-scaling components: {e}")
+            
             # Stop all agents
             for agent_id, agent in self.agents.items():
                 try:
@@ -336,7 +419,8 @@ class EnhancedOllamaFlow:
             stats = {
                 'tasks_completed': self.tasks_completed,
                 'agents_count': len(self.agents),
-                'architecture': self.architecture
+                'architecture': self.architecture,
+                'auto_scaling_enabled': self.auto_scaling
             }
             logger.info(f"📊 Final statistics: {stats}")
             
@@ -382,7 +466,10 @@ def create_arg_parser():
 Examples:
   %(prog)s run "Create a Python OpenCV project for drone image recognition"
   %(prog)s run "Build a web API" --drones 6 --arch CENTRALIZED
-  %(prog)s interactive --model llama3 --drones 8
+  %(prog)s run "Create a machine learning model" --auto-scaling --scaling-strategy HYBRID
+  %(prog)s run "Develop a complex system" --auto-scaling --scaling-strategy GPU_MEMORY_BASED --docker
+  %(prog)s interactive --model llama3 --auto-scaling --scaling-strategy AGGRESSIVE
+  %(prog)s interactive --drones 8 --auto-scaling
         """
     )
     
@@ -397,6 +484,10 @@ Examples:
     run_parser.add_argument('--arch', choices=['HIERARCHICAL', 'CENTRALIZED', 'FULLY_CONNECTED'], 
                            default='HIERARCHICAL', help='System architecture')
     run_parser.add_argument('--no-auto-shutdown', action='store_true', help='Disable auto-shutdown')
+    run_parser.add_argument('--auto-scaling', action='store_true', help='Enable auto-scaling system')
+    run_parser.add_argument('--scaling-strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'], 
+                           default='HYBRID', help='Auto-scaling strategy (default: HYBRID)')
+    run_parser.add_argument('--docker', action='store_true', help='Enable Docker container mode')
     
     # Interactive command
     interactive_parser = subparsers.add_parser('interactive', help='Run in interactive mode')
@@ -405,6 +496,10 @@ Examples:
     interactive_parser.add_argument('--drones', type=int, default=4, help='Number of drone agents')
     interactive_parser.add_argument('--arch', choices=['HIERARCHICAL', 'CENTRALIZED', 'FULLY_CONNECTED'], 
                                    default='HIERARCHICAL', help='System architecture')
+    interactive_parser.add_argument('--auto-scaling', action='store_true', help='Enable auto-scaling system')
+    interactive_parser.add_argument('--scaling-strategy', choices=['GPU_MEMORY_BASED', 'WORKLOAD_BASED', 'HYBRID', 'CONSERVATIVE', 'AGGRESSIVE'], 
+                                   default='HYBRID', help='Auto-scaling strategy (default: HYBRID)')
+    interactive_parser.add_argument('--docker', action='store_true', help='Enable Docker container mode')
     
     return parser
 
@@ -424,7 +519,10 @@ async def main():
             model=args.model,
             drone_count=args.drones,
             architecture=args.arch,
-            auto_shutdown=not getattr(args, 'no_auto_shutdown', False)
+            auto_shutdown=not getattr(args, 'no_auto_shutdown', False),
+            docker_mode=getattr(args, 'docker', False),
+            auto_scaling=getattr(args, 'auto_scaling', False),
+            scaling_strategy=getattr(args, 'scaling_strategy', 'HYBRID')
         )
         
         # Initialize system

@@ -1,0 +1,136 @@
+{
+  "auto_scaling": {
+    "enabled": true,
+    "strategy": "HYBRID",
+    "model": "phi3:mini",
+    
+    "gpu_scaling": {
+      "min_agents": 1,
+      "max_agents": 8,
+      "memory_buffer_mb": 1024,
+      "memory_safety_margin": 0.15,
+      "scale_up_threshold": 0.75,
+      "scale_down_threshold": 0.40,
+      "scale_check_interval": 15.0,
+      "cooldown_period": 30.0
+    },
+    
+    "workload_scaling": {
+      "high_queue_length": 10,
+      "high_wait_time": 30.0,
+      "high_cpu_usage": 80.0,
+      "high_memory_usage": 85.0,
+      "low_idle_agents": 0.2,
+      "agent_overload_threshold": 0.8,
+      "scale_up_cooldown": 60.0,
+      "scale_down_cooldown": 120.0
+    },
+    
+    "dynamic_agent_management": {
+      "max_agents": 16,
+      "min_agents": 1,
+      "agent_timeout_seconds": 300,
+      "idle_timeout_seconds": 600,
+      "cleanup_interval_seconds": 60,
+      "batch_creation_size": 3,
+      "graceful_shutdown_timeout": 30
+    },
+    
+    "strategies": {
+      "GPU_MEMORY_BASED": {
+        "description": "Skaliert basierend auf verfügbarem GPU-Speicher",
+        "best_for": "Systeme mit begrenztem GPU-Speicher",
+        "priority": "gpu_memory"
+      },
+      "WORKLOAD_BASED": {
+        "description": "Skaliert basierend auf Task-Queue und Auslastung",
+        "best_for": "Queue-intensive Anwendungen", 
+        "priority": "workload_metrics"
+      },
+      "HYBRID": {
+        "description": "Kombiniert GPU- und Workload-Metriken",
+        "best_for": "Ausgewogene Systeme (empfohlen)",
+        "priority": "consensus"
+      },
+      "CONSERVATIVE": {
+        "description": "Vorsichtige Scaling-Entscheidungen",
+        "best_for": "Produktive Umgebungen",
+        "priority": "stability"
+      },
+      "AGGRESSIVE": {
+        "description": "Proaktive Scaling-Entscheidungen",
+        "best_for": "Entwicklung und Testing",
+        "priority": "performance"
+      }
+    },
+    
+    "model_requirements": {
+      "phi3:mini": {
+        "min_memory_mb": 2048,
+        "recommended_memory_mb": 3072,
+        "context_length": 4096,
+        "parameters": "3.8B"
+      },
+      "llama3:8b": {
+        "min_memory_mb": 5120,
+        "recommended_memory_mb": 6144,
+        "context_length": 8192,
+        "parameters": "8B"
+      },
+      "codellama:7b": {
+        "min_memory_mb": 4608,
+        "recommended_memory_mb": 5632,
+        "context_length": 16384,
+        "parameters": "7B"
+      },
+      "llama3:13b": {
+        "min_memory_mb": 8192,
+        "recommended_memory_mb": 10240,
+        "context_length": 8192,
+        "parameters": "13B"
+      },
+      "llama3:70b": {
+        "min_memory_mb": 40960,
+        "recommended_memory_mb": 49152,
+        "context_length": 8192,
+        "parameters": "70B"
+      }
+    },
+    
+    "environments": {
+      "development": {
+        "strategy": "AGGRESSIVE",
+        "scale_check_interval": 10.0,
+        "cooldown_period": 15.0,
+        "memory_safety_margin": 0.10
+      },
+      "testing": {
+        "strategy": "HYBRID",
+        "scale_check_interval": 15.0,
+        "cooldown_period": 25.0,
+        "memory_safety_margin": 0.15
+      },
+      "production": {
+        "strategy": "CONSERVATIVE", 
+        "scale_check_interval": 30.0,
+        "cooldown_period": 60.0,
+        "memory_safety_margin": 0.20
+      }
+    }
+  },
+  
+  "monitoring": {
+    "enable_detailed_logging": false,
+    "log_scaling_events": true,
+    "log_agent_lifecycle": true,
+    "metrics_collection_interval": 5.0,
+    "status_report_interval": 60.0
+  },
+  
+  "advanced": {
+    "enable_custom_callbacks": false,
+    "enable_external_scaling_api": false,
+    "enable_predictive_scaling": false,
+    "enable_cost_optimization": false
+  }
+}
