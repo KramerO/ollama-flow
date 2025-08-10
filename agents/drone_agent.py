@@ -36,19 +36,20 @@ class DroneRole(Enum):
     SECURITY_SPECIALIST = "security_specialist"
 
 class DroneAgent(BaseAgent):
-    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = DroneRole.DEVELOPER):
+    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = None):
         super().__init__(agent_id, name)
         self.model = model  # Fallback model
         self.project_folder_path = project_folder_path
-        self.role = role
-        self.capabilities = self._get_role_capabilities()
+        self.role = role  # Now defaults to None for dynamic assignment
+        self.capabilities = self._get_role_capabilities() if role else []
         
         # Initialize LLM Chooser for dynamic model selection
         self.llm_chooser = None
         if LLM_CHOOSER_AVAILABLE:
             try:
                 self.llm_chooser = get_llm_chooser()
-                logger.info(f"✅ LLM Chooser initialized for {self.name} ({self.role.value})")
+                role_name = self.role.value if self.role else "dynamic"
+                logger.info(f"✅ LLM Chooser initialized for {self.name} ({role_name})")
             except Exception as e:
                 logger.warning(f"⚠️ Failed to initialize LLM Chooser: {e}")
         
@@ -63,17 +64,21 @@ class DroneAgent(BaseAgent):
 
     async def _perform_task(self, prompt: str) -> str:
         try:
+            # Ensure role is assigned before task execution
+            if not self.role:
+                print(f"⚠️ [DroneAgent {self.name}] No role assigned, using DEVELOPER as fallback")
+                self.role = DroneRole.DEVELOPER
+                self.capabilities = self._get_role_capabilities()
+            
             # Wähle optimales LLM basierend auf Rolle und Task
             selected_model = self._choose_optimal_model(prompt)
             
-            # Erweitere Prompt um rollenspezifische Kontexte
-            enhanced_prompt = self._enhance_prompt_for_role(prompt)
-            
-            logger.info(f"🎯 {self.name} ({self.role.value}) uses model: {selected_model}")
+            role_name = self.role.value if self.role else "dynamic"
+            logger.info(f"🎯 {self.name} ({role_name}) uses model: {selected_model}")
             
             response = ollama.chat(
                 model=selected_model,
-                messages=[{"role": "user", "content": enhanced_prompt}],
+                messages=[{"role": "user", "content": prompt}],
             )
             
             # Post-processing basierend auf Rolle
@@ -90,11 +95,12 @@ class DroneAgent(BaseAgent):
             
         except Exception as e:
             logger.error(f"❌ Task execution failed for {self.name}: {e}")
-            print(f"Error performing task: {e}")
+            print(f"❌ Error in agent {self.name} ({self.agent_id}) polling task: {e}")
             raise
 
     async def _run_command(self, command: str) -> str:
-        print(f"[DroneAgent {self.name} ({self.role.value})] Executing command: {command}")
+        role_name = self.role.value if self.role else "dynamic"
+        print(f"[DroneAgent {self.name} ({role_name})] Executing command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -247,33 +253,103 @@ class DroneAgent(BaseAgent):
             command_output = await self._run_command(command_to_execute)
         return command_output
 
-    async def _analyze_and_execute_task(self, task: str) -> str:
-        """Analyze task and decide whether to use LLM or direct command execution"""
-        # Enhanced command execution prompts for better AI understanding
-        enhanced_prompt = f"""
-You are an AI assistant with command-line access. Analyze this task and provide the most efficient solution:
-
-Task: {task}
-
-You have the following capabilities:
-1. Create files using standard commands (echo, cat, touch, etc.)
-2. Execute Python scripts and install packages
-3. Use any command-line tools available on the system
-4. Generate code and save it to files
-
-For this task, please:
-1. First, analyze what needs to be done
-2. Then provide the specific commands to execute
-3. If code generation is needed, create the code and save it to the appropriate file
-
-Be practical and use command-line tools effectively. Respond with clear steps and commands.
-"""
+    def assign_dynamic_role(self, task: str) -> DroneRole:
+        """Dynamically assign role based on task analysis"""
+        task_lower = task.lower()
         
-        # Get AI response with enhanced prompt
+        # Keywords that suggest specific roles
+        role_keywords = {
+            DroneRole.DATA_SCIENTIST: [
+                'machine learning', 'ml', 'model', 'train', 'predict', 'dataset',
+                'pandas', 'numpy', 'scikit', 'tensorflow', 'pytorch', 'analysis',
+                'statistics', 'correlation', 'regression', 'classification',
+                'opencv', 'cv2', 'image recognition', 'computer vision', 'bildverarbeitung',
+                'bilderkennungs', 'bilderkennung', 'image processing', 'drone perspective',
+                'pattern recognition', 'feature detection', 'object detection'
+            ],
+            DroneRole.ANALYST: [
+                'analyze', 'report', 'document', 'review', 'assess', 'evaluate',
+                'metrics', 'dashboard', 'visualization', 'chart', 'graph',
+                'insights', 'trends', 'patterns', 'summary', 'daten', 'data'
+            ],
+            DroneRole.IT_ARCHITECT: [
+                'architecture', 'design', 'system', 'infrastructure', 'scalability',
+                'microservices', 'api', 'database', 'security', 'deployment',
+                'cloud', 'docker', 'kubernetes', 'projekt', 'project structure'
+            ],
+            DroneRole.DEVELOPER: [
+                'code', 'develop', 'implement', 'build', 'create', 'program',
+                'function', 'class', 'script', 'application', 'web', 'frontend',
+                'backend', 'debug', 'test', 'fix', 'python', 'erstelle', 'baust'
+            ],
+            DroneRole.SECURITY_SPECIALIST: [
+                'security', 'secure', 'vulnerability', 'audit', 'penetration', 'encrypt',
+                'authenticate', 'authorize', 'compliance', 'threat', 'attack', 'defense',
+                'owasp', 'csrf', 'xss', 'injection', 'authentication', 'authorization',
+                'ssl', 'tls', 'firewall', 'intrusion', 'malware', 'breach', 'privacy',
+                'sicherheit', 'verschlüsselung', 'angriff', 'schutz', 'bedrohung',
+                'risks', 'risk assessment', 'cyber', 'cybersecurity', 'hacking', 'exploit'
+            ]
+        }
+        
+        # Score each role based on keyword matches
+        role_scores = {}
+        for role, keywords in role_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in task_lower)
+            role_scores[role] = score
+            
+        # Return role with highest score, default to DEVELOPER
+        best_role = max(role_scores.items(), key=lambda x: x[1])
+        assigned_role = best_role[0] if best_role[1] > 0 else DroneRole.DEVELOPER
+        
+        # Update drone's role and capabilities
+        old_role = self.role.value if self.role else "None"
+        self.role = assigned_role
+        self.capabilities = self._get_role_capabilities()
+        
+        print(f"🎭 [DroneAgent {self.name}] Dynamic role assignment: {old_role} -> {assigned_role.value}")
+        print(f"🎯 [DroneAgent {self.name}] Now specialized as: {assigned_role.value.upper()}")
+        print(f"💪 [DroneAgent {self.name}] Capabilities: {', '.join(self.capabilities)}")
+        
+        # Update role monitor if available
+        try:
+            import role_monitor
+            role_monitor.update_role(
+                self.agent_id, 
+                self.name, 
+                old_role, 
+                assigned_role.value, 
+                task[:100]  # First 100 chars of task
+            )
+        except ImportError:
+            pass  # Role monitor not available
+            
+        return assigned_role
+
+    async def _analyze_and_execute_task(self, task: str) -> str:
+        """Analyze task, assign dynamic role, and execute with role-specific context"""
+        # CRITICAL: Ensure role is assigned before any task processing
+        if not self.role:
+            try:
+                assigned_role = self.assign_dynamic_role(task)
+                print(f"✅ [DroneAgent {self.name}] Role successfully assigned: {assigned_role.value}")
+            except Exception as e:
+                print(f"❌ [DroneAgent {self.name}] Role assignment failed: {e}")
+                # Set default role to prevent NoneType errors
+                self.role = DroneRole.DEVELOPER
+                self.capabilities = self._get_role_capabilities()
+                print(f"🔄 [DroneAgent {self.name}] Fallback to DEVELOPER role")
+        
+        # Get role-specific enhanced prompt
+        enhanced_prompt = self._enhance_prompt_for_role(task)
+        
+        # Get AI response with role-specific enhanced prompt
         result = await self._perform_task(enhanced_prompt)
         
         # Parse and execute any commands found in the response
-        await self._parse_and_execute_commands(result)
+        command_output = await self._parse_and_execute_commands(result)
+        if command_output:
+            result += f"\n\n=== COMMAND EXECUTION RESULTS ===\n{command_output}"
         
         # Extract and save any Python code found in the response using enhanced generator
         if "python" in task.lower() or ".py" in task.lower() or "opencv" in task.lower():
@@ -361,7 +437,7 @@ Be practical and use command-line tools effectively. Respond with clear steps an
     
     def _choose_optimal_model(self, task_context: str) -> str:
         """Wählt das optimale LLM basierend auf Rolle und Task-Kontext"""
-        if self.llm_chooser:
+        if self.llm_chooser and self.role:
             try:
                 optimal_model = self.llm_chooser.choose_model_for_role(
                     self.role.value, 
@@ -380,7 +456,7 @@ Be practical and use command-line tools effectively. Respond with clear steps an
         security_context = ""
         
         # Spezielle Security-Behandlung
-        if self.role == DroneRole.SECURITY_SPECIALIST:
+        if self.role and self.role == DroneRole.SECURITY_SPECIALIST:
             security_context = self._get_security_context(prompt)
         
         enhanced_prompt = f"""{role_context}
@@ -555,6 +631,9 @@ Always conduct thorough security reviews with qualified security professionals."
     
     def _get_role_context(self) -> str:
         """Get role-specific context for enhanced prompts"""
+        if not self.role:
+            return "🎯 ROLE: DYNAMIC ASSIGNMENT - Analyzing task to determine optimal role"
+            
         role_contexts = {
             DroneRole.ANALYST: """
 🎯 ROLE: ANALYST DRONE - Data Intelligence Specialist
@@ -869,42 +948,11 @@ As a developer, focus on:
         }
         return role_contexts.get(self.role, f"Task: {task}")
 
-    async def _analyze_and_execute_task(self, task: str) -> str:
-        """Analyze task and decide whether to use LLM or direct command execution with role-specific context"""
-        # Get role-specific enhanced prompt
-        enhanced_prompt = self._get_role_specific_prompt(task)
-        
-        # Add general capabilities context
-        enhanced_prompt += f"""
-
-Your available capabilities: {', '.join(self.capabilities)}
-
-You have the following technical capabilities:
-1. Create files using standard commands (echo, cat, touch, etc.)
-2. Execute Python scripts and install packages
-3. Use any command-line tools available on the system
-4. Generate code and save it to files
-
-For this task, please:
-1. First, analyze what needs to be done from your role perspective
-2. Then provide the specific commands to execute
-3. If code generation is needed, create the code and save it to the appropriate file
-
-Be practical and use command-line tools effectively while leveraging your role expertise.
-"""
-        
-        # Get AI response with role-specific enhanced prompt
-        result = await self._perform_task(enhanced_prompt)
-        
-        # Parse and execute any commands found in the response
-        await self._parse_and_execute_commands(result)
-        
-        return result
 
     def get_role_info(self) -> dict:
         """Get information about drone's role and capabilities"""
         return {
-            "role": self.role.value,
+            "role": self.role.value if self.role else "dynamic",
             "capabilities": self.capabilities,
             "agent_id": self.agent_id,
             "name": self.name
@@ -935,7 +983,8 @@ Be practical and use command-line tools effectively while leveraging your role e
         # Execute found commands
         for command in commands_found:
             if command and not command.startswith('#'):  # Skip comments
-                print(f"[DroneAgent {self.name} ({self.role.value})] Executing AI-suggested command: {command}")
+                role_name = self.role.value if self.role else "dynamic"
+                print(f"[DroneAgent {self.name} ({role_name})] Executing AI-suggested command: {command}")
                 try:
                     cmd_result = await self._run_command(command)
                     command_output += f"\n--- Command: {command} ---\n{cmd_result}\n"
@@ -945,12 +994,15 @@ Be practical and use command-line tools effectively while leveraging your role e
         return command_output
 
     async def receive_message(self, message: AgentMessage):
-        print(f"DroneAgent {self.name} ({self.agent_id}) with role {self.role.value} received message from {message.sender_id}: {message.content}")
+        role_name = self.role.value if self.role else "dynamic"
+        print(f"DroneAgent {self.name} ({self.agent_id}) with role {role_name} received message from {message.sender_id}: {message.content}")
 
         # Use AI analysis and command execution approach
         result = await self._analyze_and_execute_task(message.content)
         
-        print(f"DroneAgent {self.name} ({self.agent_id}) with role {self.role.value} completed task analysis")
+        # Role will be assigned during _analyze_and_execute_task
+        assigned_role = self.role.value if self.role else "dynamic"
+        print(f"DroneAgent {self.name} ({self.agent_id}) with role {assigned_role} completed task analysis")
 
         # Handle file saving and additional command execution
         save_message = await self._handle_file_saving(message.content, result)
@@ -961,7 +1013,8 @@ Be practical and use command-line tools effectively while leveraging your role e
             final_response += f"\nCommand Output:\n{command_output}"
 
         # Add role information to response
-        role_info = f"\n[Completed by {self.role.value} drone: {self.name}]"
+        final_role = self.role.value if self.role else "dynamic"
+        role_info = f"\n[Completed by {final_role} drone: {self.name}]"
         final_response += role_info
         
         await self.send_message(message.sender_id, "response", final_response, message.request_id)

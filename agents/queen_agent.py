@@ -133,26 +133,8 @@ class QueenAgent(BaseAgent):
         return None
 
     def _initialize_drone_roles(self):
-        """Initialize drone roles for available drones (respect existing roles)"""
-        available_roles = list(DroneRole)
-        for i, drone in enumerate(self.drone_agents):
-            # Check if drone already has a role assigned
-            if hasattr(drone, 'role') and drone.role is not None:
-                # Use existing role
-                role = drone.role
-                print(f"[QueenAgent] Preserving existing role {role.value} for {drone.name}")
-            else:
-                # Assign new role in round-robin fashion
-                role = available_roles[i % len(available_roles)]
-                if hasattr(drone, 'role'):
-                    drone.role = role
-                print(f"[QueenAgent] Assigning new role {role.value} to {drone.name}")
-            
-            self.drone_roles[drone.agent_id] = role
-            
-            # Update capabilities if supported
-            if hasattr(drone, '_get_role_capabilities'):
-                drone.capabilities = drone._get_role_capabilities()
+        """Initialize drone roles for available drones (no pre-assignment for dynamic role system)"""
+        print(f"[QueenAgent] {len(self.drone_agents)} drones initialized with dynamic role assignment capability")
                     
     def _determine_task_role(self, task: str) -> DroneRole:
         """Determine the most appropriate role for a given task"""
@@ -298,26 +280,13 @@ Ensure the following order if multiple operations are needed:
                         await self.send_message("orchestrator", "final-error", "No DroneAgents available.", message.request_id)
                         return
 
-                    # Assign role and select appropriate drone
-                    optimal_drone, assigned_role = self._assign_optimal_drone_for_task(subtask)
-                    
-                    if not optimal_drone:
-                        # Fallback to round-robin if no optimal match
-                        optimal_drone = self.drone_agents[self.current_drone_index]
-                        self.current_drone_index = (self.current_drone_index + 1) % len(self.drone_agents)
-                        assigned_role = self._determine_task_role(subtask)
-                    
-                    # Update drone role if it has role assignment capability
-                    if hasattr(optimal_drone, 'role'):
-                        optimal_drone.role = assigned_role
-                        if hasattr(optimal_drone, '_get_role_capabilities'):
-                            optimal_drone.capabilities = optimal_drone._get_role_capabilities()
-                    
-                    self.drone_roles[optimal_drone.agent_id] = assigned_role
+                    # Use round-robin to select drone (role will be assigned dynamically by the drone)
+                    optimal_drone = self.drone_agents[self.current_drone_index]
+                    self.current_drone_index = (self.current_drone_index + 1) % len(self.drone_agents)
 
-                    delegated_task = self._structure_task_for_drone(subtask, assigned_role, optimal_drone.name)
-                    print(f"QueenAgent delegating {assigned_role.value} task to {optimal_drone.name} ({optimal_drone.agent_id})")
-                    await self.send_message(optimal_drone.agent_id, "sub-task", delegated_task, message.request_id)
+                    # Send task directly - drone will assign its own role dynamically
+                    print(f"QueenAgent delegating task to {optimal_drone.name} ({optimal_drone.agent_id}) for dynamic role assignment")
+                    await self.send_message(optimal_drone.agent_id, "sub-task", subtask, message.request_id)
 
         elif message.message_type == "group-response":
             print(f"QueenAgent received group response from {message.sender_id}: {message.content}")

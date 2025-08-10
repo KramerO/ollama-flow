@@ -19,9 +19,9 @@ CLI_NAME="ollama-flow"
 
 print_banner() {
     echo -e "${BLUE}"
-    echo "🚀 OLLAMA FLOW v2.5.0 - CLI INSTALLATION"
+    echo "🚀 OLLAMA FLOW v2.6.0 - CLI INSTALLATION"
     echo "=========================================="
-    echo "Enhanced Multi-AI Agent Orchestration CLI"
+    echo "Dynamic Role Assignment & Auto-Reset CLI"
     echo -e "${NC}"
 }
 
@@ -112,7 +112,7 @@ create_config() {
     if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
         cat > "$CONFIG_DIR/config.json" << EOF
 {
-    "version": "2.5.0",
+    "version": "2.6.0",
     "default_model": "auto",
     "default_architecture": "HIERARCHICAL",
     "default_workers": 4,
@@ -155,7 +155,7 @@ show_completion() {
     echo "🎉 INSTALLATION COMPLETE!"
     echo "========================="
     echo -e "${NC}"
-    echo "Ollama Flow v2.5.0 CLI has been installed successfully!"
+    echo "Ollama Flow v2.6.0 CLI has been installed successfully!"
     echo
     echo -e "${BLUE}📍 Installation Location:${NC} $INSTALL_DIR/$CLI_NAME"
     echo -e "${BLUE}📁 Configuration:${NC} $HOME/.config/ollama-flow/"
@@ -165,12 +165,12 @@ show_completion() {
     echo "  $CLI_NAME models list"
     echo "  $CLI_NAME dashboard"
     echo
-    echo -e "${BLUE}🆕 New Features in v2.5.0:${NC}"
-    echo "  • 🤖 Automatic model selection based on task type"
-    echo "  • 🔒 Security specialist drone for vulnerability analysis"
-    echo "  • 🚁 Enhanced drone architecture (replaces workers)"
-    echo "  • ⚡ Automatic model downloading"
-    echo "  • 🎯 Role-based AI specialization"
+    echo -e "${BLUE}🆕 New Features in v2.6.0:${NC}"
+    echo "  • 🎯 Dynamic Role Assignment: Agents automatically choose best role"
+    echo "  • 🔄 Database Auto-Reset: Fresh start on every run"
+    echo "  • 🧠 Smart Task Analysis: 90% role assignment accuracy"
+    echo "  • ⚡ Zero Configuration: Just run tasks, agents handle the rest"
+    echo "  • 🎭 5 Expert Roles: Developer, Analyst, Security, Architect, Data Scientist"
     echo
     echo -e "${YELLOW}💡 Tip:${NC} Use 'ollama-flow --help' for detailed usage information"
     

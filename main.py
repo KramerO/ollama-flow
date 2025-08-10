@@ -106,8 +106,9 @@ async def main():
         await handle_llm_config_commands(args)
         return
 
-    # Initialize DB Manager
+    # Initialize DB Manager and clear old messages for fresh start
     db_manager = MessageDBManager(db_path='ollama_flow_messages.db')
+    db_manager.clear_all_messages()
 
     try:
         orchestrator = Orchestrator(db_manager)
@@ -191,14 +192,12 @@ async def main():
 
             worker_agents = []
             for i in range(worker_count):
-                # Assign roles in round-robin fashion
-                available_roles = list(DroneRole)
-                role = available_roles[i % len(available_roles)]
-                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1} ({role.value})", ollama_model, project_folder, role)
+                # Create drones without predefined roles for dynamic assignment
+                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1}", ollama_model, project_folder)
                 worker_agents.append(drone)
                 orchestrator.register_agent(drone)
                 sub_queen_groups[i % sub_queen_count].append(drone) # Distribute drones among sub-queens
-                print(f"Created drone agent {i+1} with role: {role.value}")
+                print(f"Created drone agent {i+1} with dynamic role assignment")
 
             sub_queen_agents = []
             for i in range(sub_queen_count):
@@ -210,12 +209,10 @@ async def main():
         elif architecture_type in ["CENTRALIZED", "FULLY_CONNECTED"]:
             # For these architectures, workers are directly managed by the Queen
             for i in range(worker_count):
-                # Assign roles in round-robin fashion
-                available_roles = list(DroneRole)
-                role = available_roles[i % len(available_roles)]
-                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1} ({role.value})", ollama_model, project_folder, role)
+                # Create drones without predefined roles for dynamic assignment
+                drone = DroneAgent(f"drone-agent-{i+1}", f"Drone {i+1}", ollama_model, project_folder)
                 orchestrator.register_agent(drone)
-                print(f"Created drone agent {i+1} with role: {role.value}")
+                print(f"Created drone agent {i+1} with dynamic role assignment")
 
         # Initialize Queen Agent after all other agents are registered
         queen_agent.initialize_agents()

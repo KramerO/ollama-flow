@@ -36,6 +36,21 @@ class MessageDBManager:
         """)
         self.conn.commit()
 
+    def clear_all_messages(self):
+        """Clear all messages from the database on startup for a fresh start"""
+        if self.conn is None:
+            self.connect()
+        
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM messages")
+        self.conn.commit()
+        
+        # Reset auto-increment counter
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='messages'")
+        self.conn.commit()
+        
+        print("✅ Database cleared - Fresh start for ollama-flow")
+
     def insert_message(self, sender_id: str, receiver_id: str, type: str, content: str, request_id: str = None) -> int:
         # Ensure connection is active
         if self.conn is None:

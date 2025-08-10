@@ -366,6 +366,41 @@ class EnhancedDBManager:
                 cleaned += 1
         
         return cleaned
+
+    def clear_all_messages(self):
+        """Clear all messages from the database on startup for a fresh start"""
+        try:
+            if self.use_redis and self.redis_client:
+                # Clear Redis database
+                self.redis_client.flushdb()
+                self.logger.info("✅ Redis database cleared - Fresh start for ollama-flow")
+            else:
+                # Clear fallback storage
+                with self.lock:
+                    self.fallback_storage = {
+                        'messages': {},
+                        'processed_messages': set(),
+                        'stats': {
+                            'total_messages': 0,
+                            'processed_messages': 0,
+                            'failed_messages': 0
+                        }
+                    }
+                self.logger.info("✅ In-memory database cleared - Fresh start for ollama-flow")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to clear database: {e}")
+            # Fallback to in-memory clear
+            with self.lock:
+                self.fallback_storage = {
+                    'messages': {},
+                    'processed_messages': set(),
+                    'stats': {
+                        'total_messages': 0,
+                        'processed_messages': 0,
+                        'failed_messages': 0
+                    }
+                }
+            self.logger.info("✅ Fallback database cleared - Fresh start for ollama-flow")
     
     def close(self):
         """Gracefully close database connections"""
