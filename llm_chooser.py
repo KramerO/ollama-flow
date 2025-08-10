@@ -69,41 +69,41 @@ class LLMChooser:
                     "fallback": ["codellama:7b", "llama3", "phi3:mini"]
                 },
                 "it_architect": {
-                    "primary": "llama3:70b", 
-                    "fallback": ["mixtral:8x7b", "llama3", "phi3:medium"]
+                    "primary": "llama3", 
+                    "fallback": ["codellama:7b", "phi3:medium"]
                 },
                 "analyst": {
-                    "primary": "mixtral:8x7b",
-                    "fallback": ["llama3", "phi3:medium"]
+                    "primary": "llama3",
+                    "fallback": ["phi3:medium", "codellama:7b"]
                 },
                 "datascientist": {
-                    "primary": "llama3:70b",
-                    "fallback": ["codellama:13b", "llama3", "mixtral:8x7b"]
+                    "primary": "llama3",
+                    "fallback": ["codellama:7b", "phi3:medium"]
                 },
                 "security_specialist": {
-                    "primary": "llama3:70b",
-                    "fallback": ["mixtral:8x7b", "codellama:13b", "llama3"]
+                    "primary": "llama3",
+                    "fallback": ["codellama:7b", "phi3:medium"]
                 }
             },
             "task_mapping": {
                 "code_development": {
-                    "preferred_models": ["codegemma:7b", "codellama:7b", "codellama:13b"],
+                    "preferred_models": ["codegemma:7b", "codellama:7b", "llama3"],
                     "avoid_models": ["phi3:mini"]
                 },
                 "architecture_design": {
-                    "preferred_models": ["llama3:70b", "mixtral:8x7b", "llama3"],
+                    "preferred_models": ["llama3", "codellama:7b", "phi3:medium"],
                     "avoid_models": ["phi3:mini"]
                 },
                 "security_audit": {
-                    "preferred_models": ["llama3:70b", "mixtral:8x7b", "codellama:13b"],
+                    "preferred_models": ["llama3", "codellama:7b", "phi3:medium"],
                     "avoid_models": ["phi3:mini"]
                 },
                 "data_analysis": {
-                    "preferred_models": ["llama3:70b", "mixtral:8x7b", "llama3"],
+                    "preferred_models": ["llama3", "codellama:7b", "phi3:medium"],
                     "avoid_models": []
                 },
                 "documentation": {
-                    "preferred_models": ["llama3", "mixtral:8x7b", "phi3:medium"],
+                    "preferred_models": ["llama3", "phi3:medium", "codellama:7b"],
                     "avoid_models": []
                 }
             },
@@ -166,10 +166,11 @@ class LLMChooser:
             logger.error(f"❌ Fehler beim Erstellen der Standard-Konfiguration: {e}")
     
     def _detect_available_models(self):
-        """Erkennt verfügbare Ollama-Modelle"""
+        """Erkennt verfügbare Ollama-Modelle (nur unter 5.5GB)"""
         try:
             # Verwende ollama list Kommando
             import subprocess
+            import re
             result = subprocess.run(['ollama', 'list'], capture_output=True, text=True)
             
             if result.returncode == 0:
@@ -178,10 +179,21 @@ class LLMChooser:
                 
                 for line in lines:
                     if line.strip():
-                        model_name = line.split()[0]  # First column is model name
-                        self.available_models.append(model_name)
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            model_name = parts[0]  # First column is model name
+                            size_value = parts[2]  # Third column is size value
+                            size_unit = parts[3]   # Fourth column is size unit
+                            size_str = f"{size_value} {size_unit}"
+                            
+                            # Parse size and check if under 5.5GB
+                            if self._is_model_size_acceptable(size_str):
+                                self.available_models.append(model_name)
+                                logger.debug(f"✅ Modell {model_name} ({size_str}) akzeptiert")
+                            else:
+                                logger.info(f"⚠️ Modell {model_name} ({size_str}) übersteigt Größenlimit von 5.5GB")
                 
-                logger.info(f"✅ Verfügbare Modelle erkannt: {len(self.available_models)} Modelle")
+                logger.info(f"✅ Verfügbare Modelle erkannt: {len(self.available_models)} Modelle (unter 5.5GB)")
                 logger.debug(f"Modelle: {self.available_models}")
             else:
                 logger.warning("⚠️ Konnte Ollama-Modelle nicht auflisten")
@@ -190,6 +202,70 @@ class LLMChooser:
             logger.warning(f"⚠️ Fehler bei der Modellerkennung: {e}")
             # Fallback auf häufige Modelle
             self.available_models = ["llama3", "phi3:mini", "codellama:7b"]
+    
+    def _is_model_size_acceptable(self, size_str: str) -> bool:
+        """Prüft ob Modell unter 5.5GB ist"""
+        try:
+            import re
+            # Parse size string (e.g., "26 GB", "4.7 GB", "2.0 GB")
+            match = re.match(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)', size_str)
+            if not match:
+                return False
+            
+            size_value = float(match.group(1))
+            size_unit = match.group(2).upper()
+            
+            # Convert to GB
+            if size_unit == 'MB':
+                size_gb = size_value / 1000
+            elif size_unit == 'GB':
+                size_gb = size_value
+            elif size_unit == 'TB':
+                size_gb = size_value * 1000
+            elif size_unit == 'B':
+                size_gb = size_value / (1000 * 1000 * 1000)
+            else:
+                # Default to GB if unclear
+                size_gb = size_value
+            
+            return size_gb <= 5.5
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Fehler beim Parsen der Modellgröße '{size_str}': {e}")
+            return False  # Bei Unklarheit ablehnen
+    
+    def _check_model_size_before_download(self, model_name: str) -> bool:
+        """Prüft Modellgröße basierend auf bekannten Modell-Mustern"""
+        model_lower = model_name.lower()
+        
+        # Bekannte große Modelle (über 5.5GB) - diese nicht herunterladen
+        large_model_patterns = [
+            'mixtral:8x7b', 'mixtral-8x7b', 
+            'llama3:70b', 'llama3-70b', 'llama2:70b', 'llama2-70b',
+            'codellama:13b', 'codellama-13b', 'codellama:34b', 'codellama-34b',
+            'vicuna:13b', 'vicuna-13b', 'vicuna:33b', 'vicuna-33b',
+            'wizardcoder:13b', 'wizardcoder-13b', 'wizardcoder:34b', 'wizardcoder-34b',
+            'deepseek-coder:33b', 'deepseek-coder-33b',
+            'qwen:14b', 'qwen-14b', 'qwen:32b', 'qwen-32b', 'qwen:72b', 'qwen-72b',
+            'gemma:7b', 'gemma-7b'  # Gemma 7B ist oft größer als 5.5GB
+        ]
+        
+        # Prüfe ob Modellname einem großen Modell entspricht
+        for pattern in large_model_patterns:
+            if pattern in model_lower:
+                logger.info(f"📋 Modell {model_name} in bekannter Liste großer Modelle gefunden")
+                return False
+        
+        # Prüfe Größenhinweise im Namen
+        size_indicators = ['13b', '14b', '15b', '20b', '30b', '34b', '70b', '8x7b']
+        for indicator in size_indicators:
+            if indicator in model_lower:
+                logger.info(f"📋 Modell {model_name} enthält Größenindikator '{indicator}' - wahrscheinlich zu groß")
+                return False
+        
+        # Standardmäßig erlauben (für 7b und kleinere Modelle)
+        logger.info(f"✅ Modell {model_name} scheint unter 5.5GB zu sein - Download erlaubt")
+        return True
     
     def choose_model_for_role(self, role: str, task_context: Optional[str] = None) -> str:
         """
@@ -272,8 +348,8 @@ class LLMChooser:
         
         return None
     
-    def _is_model_available(self, model_name: str, auto_download: bool = True) -> bool:
-        """Prüft ob ein Modell verfügbar ist und lädt es ggf. herunter"""
+    def _is_model_available(self, model_name: str, auto_download: bool = False) -> bool:
+        """Prüft ob ein Modell verfügbar ist (Download standardmäßig deaktiviert)"""
         if model_name in self.available_models:
             return True
         
@@ -282,14 +358,21 @@ class LLMChooser:
             if self._download_model(model_name):
                 self._detect_available_models()  # Aktualisiere Liste
                 return model_name in self.available_models
+        else:
+            logger.info(f"⚠️ Modell {model_name} nicht verfügbar (Auto-Download deaktiviert)")
         
         return False
     
     def _download_model(self, model_name: str) -> bool:
-        """Lädt ein Ollama-Modell herunter"""
+        """Lädt ein Ollama-Modell herunter (nur wenn unter 5.5GB)"""
         try:
             import subprocess
             import time
+            
+            # Prüfe zuerst die Modellgröße ohne Download
+            if not self._check_model_size_before_download(model_name):
+                logger.warning(f"⚠️ Modell {model_name} wird nicht heruntergeladen - wahrscheinlich über 5.5GB")
+                return False
             
             print(f"🔄 Downloading {model_name}... (Das kann einige Minuten dauern)")
             
@@ -344,8 +427,8 @@ class LLMChooser:
         if task_model and task_model not in suggested:
             suggested.append(task_model)
         
-        # Fallback zu guten Allround-Modellen
-        good_models = ["llama3:70b", "mixtral:8x7b", "llama3", "codellama:13b"]
+        # Fallback zu guten Allround-Modellen (unter 5.5GB)
+        good_models = ["llama3", "codellama:7b", "phi3:medium"]
         for model in good_models:
             if self._is_model_available(model) and model not in suggested:
                 suggested.append(model)
