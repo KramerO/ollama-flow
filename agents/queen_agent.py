@@ -43,34 +43,12 @@ class QueenAgent(BaseAgent):
             raw_response = response["message"]["content"]
             print(f"[QueenAgent] Decomposition LLM Raw Response: {raw_response}")
             try:
-                # Clean the response - remove markdown code blocks
-                cleaned_response = raw_response.strip()
-                if cleaned_response.startswith('```json'):
-                    cleaned_response = cleaned_response[7:]  # Remove ```json
-                if cleaned_response.startswith('```'):
-                    cleaned_response = cleaned_response[3:]   # Remove ```
-                if cleaned_response.endswith('```'):
-                    cleaned_response = cleaned_response[:-3]  # Remove trailing ```
-                cleaned_response = cleaned_response.strip()
-                
-                # Fix Windows path separators and other escape sequences
-                import re
-                # More comprehensive Windows path fixing
-                # Replace D:\path\to\file with D:/path/to/file in JSON strings
-                cleaned_response = re.sub(r'([A-Z]):\\+([^"\\]*\\[^"\\]*)', lambda m: f'{m.group(1)}:/{m.group(2).replace(chr(92), "/")}', cleaned_response)
-                # Fix remaining Windows paths
-                cleaned_response = re.sub(r'([A-Z]):\\([^"]*)', r'\1:/\2', cleaned_response)
-                # Replace any remaining single backslashes with forward slashes in paths
-                cleaned_response = re.sub(r'([A-Z]:)/([^"]*?)\\([^"]*)', r'\1/\2/\3', cleaned_response)
-                # Escape remaining backslashes that aren't valid JSON escapes
-                cleaned_response = re.sub(r'\\(?!["\\bfnrt/uU0-9a-fA-F])', r'\\\\', cleaned_response)
-                
-                subtasks = json.loads(cleaned_response)
-                if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
+                # Try multiple parsing strategies
+                subtasks = self._parse_subtasks_robust(raw_response)
+                if subtasks:
                     return subtasks
                 else:
-                    print(f"[QueenAgent] LLM response is not a valid JSON array of strings. Falling back to single task.")
-                    print(f"[QueenAgent] Cleaned response was: {cleaned_response[:200]}...")
+                    print(f"[QueenAgent] All parsing strategies failed. Falling back to single task.")
                     return [task]
             except json.JSONDecodeError as e:
                 print(f"[QueenAgent] JSON parsing failed: {e}. Falling back to single task.")
@@ -82,19 +60,99 @@ class QueenAgent(BaseAgent):
             print(f"[QueenAgent] Error during task decomposition: {e}. Falling back to single task.")
             return [task]
 
+    def _parse_subtasks_robust(self, raw_response: str) -> list:
+        """Try multiple strategies to parse subtasks from LLM response"""
+        import re
+        
+        # Strategy 1: Standard JSON parsing with cleanup
+        try:
+            cleaned_response = raw_response.strip()
+            # Remove markdown code blocks
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]
+            cleaned_response = cleaned_response.strip()
+            
+            # Fix common JSON issues
+            # Fix unescaped quotes in strings
+            cleaned_response = re.sub(r'`print\("([^"]*)"[)]`', r'print(\1)', cleaned_response)
+            cleaned_response = re.sub(r'"([^"]*)`([^"`]*)`([^"]*)"', r'"\1\2\3"', cleaned_response)
+            
+            # Try to parse
+            subtasks = json.loads(cleaned_response)
+            if isinstance(subtasks, list) and all(isinstance(item, str) for item in subtasks):
+                print(f"[QueenAgent] Strategy 1 successful: {len(subtasks)} subtasks")
+                return subtasks
+        except:
+            pass
+        
+        # Strategy 2: Extract array items with regex
+        try:
+            array_pattern = r'\[([^\[\]]*(?:"[^"]*"[^[\]]*)*)\]'
+            match = re.search(array_pattern, raw_response, re.DOTALL)
+            if match:
+                array_content = match.group(1)
+                # Simple item extraction
+                items = []
+                # Find quoted strings
+                item_pattern = r'"([^"]*(?:\\.[^"]*)*)"'
+                for item_match in re.finditer(item_pattern, array_content):
+                    items.append(item_match.group(1))
+                
+                if items:
+                    print(f"[QueenAgent] Strategy 2 successful: {len(items)} subtasks")
+                    return items
+        except:
+            pass
+            
+        # Strategy 3: Line-by-line extraction
+        try:
+            lines = raw_response.split('\n')
+            subtasks = []
+            for line in lines:
+                line = line.strip()
+                # Look for quoted strings or numbered items
+                if line.startswith('"') and line.endswith('",'):
+                    subtasks.append(line[1:-2])  # Remove quotes and comma
+                elif line.startswith('"') and line.endswith('"'):
+                    subtasks.append(line[1:-1])  # Remove quotes
+                elif re.match(r'^\d+\.\s*(.+)', line):
+                    # Numbered list item
+                    subtasks.append(re.match(r'^\d+\.\s*(.+)', line).group(1))
+            
+            if subtasks:
+                print(f"[QueenAgent] Strategy 3 successful: {len(subtasks)} subtasks")
+                return subtasks
+        except:
+            pass
+            
+        print("[QueenAgent] All parsing strategies failed")
+        return None
+
     def _initialize_drone_roles(self):
-        """Initialize drone roles for available drones"""
+        """Initialize drone roles for available drones (respect existing roles)"""
         available_roles = list(DroneRole)
         for i, drone in enumerate(self.drone_agents):
-            # Assign roles in round-robin fashion initially
-            role = available_roles[i % len(available_roles)]
+            # Check if drone already has a role assigned
+            if hasattr(drone, 'role') and drone.role is not None:
+                # Use existing role
+                role = drone.role
+                print(f"[QueenAgent] Preserving existing role {role.value} for {drone.name}")
+            else:
+                # Assign new role in round-robin fashion
+                role = available_roles[i % len(available_roles)]
+                if hasattr(drone, 'role'):
+                    drone.role = role
+                print(f"[QueenAgent] Assigning new role {role.value} to {drone.name}")
+            
             self.drone_roles[drone.agent_id] = role
             
-            # Update drone role if it supports it
-            if hasattr(drone, 'role'):
-                drone.role = role
-                if hasattr(drone, '_get_role_capabilities'):
-                    drone.capabilities = drone._get_role_capabilities()
+            # Update capabilities if supported
+            if hasattr(drone, '_get_role_capabilities'):
+                drone.capabilities = drone._get_role_capabilities()
                     
     def _determine_task_role(self, task: str) -> DroneRole:
         """Determine the most appropriate role for a given task"""
