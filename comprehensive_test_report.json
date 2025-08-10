@@ -1,0 +1,105 @@
+{
+  "timestamp": 1754812686.2429464,
+  "total_execution_time": 0.8950455188751221,
+  "summary": {
+    "total_tests": 10,
+    "passed": 2,
+    "failed": 8,
+    "success_rate": 0.2
+  },
+  "passed_tests": [
+    {
+      "suite": "Role Management Integration",
+      "status": "PASSED",
+      "execution_time": 0.035794734954833984,
+      "details": {
+        "role_assignments_tested": 5,
+        "assignment_accuracy": 0.6,
+        "role_statistics": {
+          "datascientist": 1,
+          "developer": 1,
+          "it_architect": 1,
+          "analyst": 2
+        },
+        "model_assignments": [
+          {
+            "role": "developer",
+            "assigned_model": "codellama:7b"
+          },
+          {
+            "role": "security_specialist",
+            "assigned_model": "llama3:latest"
+          },
+          {
+            "role": "analyst",
+            "assigned_model": "llama3:latest"
+          },
+          {
+            "role": "datascientist",
+            "assigned_model": "codellama:7b"
+          },
+          {
+            "role": "it_architect",
+            "assigned_model": "llama3:latest"
+          }
+        ],
+        "unique_models_used": 2
+      }
+    },
+    {
+      "suite": "LLM Chooser Integration",
+      "status": "PASSED",
+      "execution_time": 0.0005228519439697266,
+      "details": {
+        "available_models_count": 7,
+        "role_selections_tested": 5,
+        "task_suggestions_working": true,
+        "size_constraint_enforced": true,
+        "unique_models_selected": 2
+      }
+    }
+  ],
+  "failed_tests": [
+    {
+      "suite": "Configuration System",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.044512033462524414
+    },
+    {
+      "suite": "Unified Agent System",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.7763595581054688
+    },
+    {
+      "suite": "Code Generation Capability",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.014813899993896484
+    },
+    {
+      "suite": "Command Execution Capability",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.014803409576416016
+    },
+    {
+      "suite": "Security Analysis Capability",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.006317615509033203
+    },
+    {
+      "suite": "Complex Multi-Role Tasks",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.0007791519165039062
+    },
+    {
+      "suite": "Performance & Scalability",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.0005097389221191406
+    },
+    {
+      "suite": "Error Handling & Recovery",
+      "error": "`BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.10/migration/#basesettings-has-moved-to-pydantic-settings for more details.\n\nFor further information visit https://errors.pydantic.dev/2.10/u/import-error",
+      "execution_time": 0.000461578369140625
+    }
+  ],
+  "system_health": "NEEDS IMPROVEMENT"
+}
