@@ -1,6 +1,6 @@
 agents:
   enable_code_generation: true
-  enable_command_execution: true
+  enable_command_execution: false
   max_agents: 10
 database:
   echo: true

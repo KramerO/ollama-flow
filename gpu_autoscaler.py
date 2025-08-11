@@ -130,7 +130,18 @@ class GPUMonitor:
                                   capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 self.vendor = GPUVendor.AMD
-                logger.info("🎮 Detected AMD GPU(s)")
+                logger.info("🎮 Detected AMD GPU(s) via ROCm")
+                return self.vendor
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        
+        try:
+            # AMD GPU Check (radeontop) - Fallback für Systeme ohne ROCm
+            result = subprocess.run(['radeontop', '-d', '-', '-l', '1'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and 'vram' in result.stdout and 'gpu' in result.stdout:
+                self.vendor = GPUVendor.AMD
+                logger.info("🎮 Detected AMD GPU(s) via radeontop")
                 return self.vendor
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
@@ -215,42 +226,164 @@ class GPUMonitor:
         return []
     
     async def _get_amd_info(self) -> List[GPUInfo]:
-        """Sammelt AMD GPU-Informationen"""
+        """Sammelt AMD GPU-Informationen mit radeontop"""
         try:
-            # AMD ROCm Info
+            # Verwende radeontop für detaillierte AMD GPU-Informationen
             process = await asyncio.create_subprocess_exec(
-                'rocm-smi', '--showmeminfo', 'vram', '--showuse',
+                'radeontop', '-d', '-', '-l', '1',
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
             
             if process.returncode != 0:
-                logger.error(f"rocm-smi failed: {stderr.decode()}")
-                return []
+                logger.error(f"radeontop failed: {stderr.decode()}")
+                return await self._get_amd_info_fallback()
             
-            # AMD Output parsing (simplified)
+            # Parse radeontop output
+            output_line = stdout.decode().strip()
             gpus = []
-            output = stdout.decode()
             
-            # Basic AMD GPU detection - would need more sophisticated parsing
-            gpu_info = GPUInfo(
-                index=0,
-                name="AMD GPU",
-                vendor=GPUVendor.AMD,
-                total_memory_mb=8192,  # Fallback values
-                used_memory_mb=1024,
-                free_memory_mb=7168,
-                utilization_percent=0.0
-            )
-            gpus.append(gpu_info)
+            # radeontop output format: 
+            # timestamp: bus XX, gpu XX%, ee XX%, vgt XX%, ta XX%, sx XX%, sh XX%, spi XX%, sc XX%, pa XX%, db XX%, cb XX%, vram XX% XXXmb, gtt XX% XXXmb, mclk XX% X.XXghz, sclk XX% X.XXghz
+            for line in output_line.split('\n'):
+                if 'vram' in line and 'gpu' in line:
+                    try:
+                        # Extract GPU usage percentage
+                        gpu_match = re.search(r'gpu\s+(\d+(?:\.\d+)?)%', line)
+                        gpu_util = float(gpu_match.group(1)) if gpu_match else 0.0
+                        
+                        # Extract VRAM info
+                        vram_match = re.search(r'vram\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)mb', line)
+                        if vram_match:
+                            vram_percent = float(vram_match.group(1))
+                            vram_used_mb = int(float(vram_match.group(2)))
+                            # Berechne total VRAM aus used und percent
+                            vram_total_mb = int(vram_used_mb / (vram_percent / 100.0)) if vram_percent > 0 else 8192
+                            vram_free_mb = vram_total_mb - vram_used_mb
+                        else:
+                            vram_total_mb = 8192  # Fallback
+                            vram_used_mb = 1024
+                            vram_free_mb = 7168
+                        
+                        # Get temperature from sensors
+                        temperature = await self._get_amd_temperature()
+                        
+                        # Extract bus number for GPU indexing
+                        bus_match = re.search(r'bus\s+(\d+)', line)
+                        gpu_index = int(bus_match.group(1)) if bus_match else 0
+                        
+                        # Get GPU name from lspci
+                        gpu_name = await self._get_amd_gpu_name(gpu_index)
+                        
+                        gpu_info = GPUInfo(
+                            index=gpu_index,
+                            name=gpu_name,
+                            vendor=GPUVendor.AMD,
+                            total_memory_mb=vram_total_mb,
+                            used_memory_mb=vram_used_mb,
+                            free_memory_mb=vram_free_mb,
+                            utilization_percent=gpu_util,
+                            temperature=temperature
+                        )
+                        gpus.append(gpu_info)
+                        
+                    except (ValueError, AttributeError) as e:
+                        logger.warning(f"Error parsing radeontop line '{line}': {e}")
+                        continue
+            
+            if not gpus:
+                logger.warning("No AMD GPUs parsed from radeontop output")
+                return await self._get_amd_info_fallback()
             
             self.gpus = gpus
             return gpus
             
+        except asyncio.TimeoutError:
+            logger.error("radeontop command timeout")
         except Exception as e:
-            logger.error(f"Error getting AMD GPU info: {e}")
+            logger.error(f"Error getting AMD GPU info with radeontop: {e}")
+        
+        return await self._get_amd_info_fallback()
+    
+    async def _get_amd_info_fallback(self) -> List[GPUInfo]:
+        """Fallback AMD GPU info wenn radeontop fehlschlägt"""
+        try:
+            # Fallback: Basic AMD GPU detection
+            temperature = await self._get_amd_temperature()
+            gpu_name = await self._get_amd_gpu_name(0)
+            
+            gpu_info = GPUInfo(
+                index=0,
+                name=gpu_name,
+                vendor=GPUVendor.AMD,
+                total_memory_mb=8192,  # Fallback values
+                used_memory_mb=1024,
+                free_memory_mb=7168,
+                utilization_percent=0.0,
+                temperature=temperature
+            )
+            
+            self.gpus = [gpu_info]
+            return self.gpus
+            
+        except Exception as e:
+            logger.error(f"Error in AMD GPU fallback: {e}")
         
         return []
+    
+    async def _get_amd_temperature(self) -> Optional[float]:
+        """Liest AMD GPU-Temperatur aus sensors"""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                'sensors',
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+            
+            if process.returncode != 0:
+                return None
+            
+            output = stdout.decode()
+            # Suche nach amdgpu Temperaturen
+            for line in output.split('\n'):
+                if 'amdgpu' in line.lower() or 'edge:' in line:
+                    temp_match = re.search(r'(\d+(?:\.\d+)?)\s*°C', line)
+                    if temp_match:
+                        return float(temp_match.group(1))
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Could not read AMD temperature: {e}")
+            return None
+    
+    async def _get_amd_gpu_name(self, gpu_index: int) -> str:
+        """Ermittelt AMD GPU-Namen über lspci"""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                'lspci', '-nn',
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+            
+            if process.returncode != 0:
+                return "AMD GPU"
+            
+            output = stdout.decode()
+            # Suche nach VGA/Display controller mit AMD/ATI
+            for line in output.split('\n'):
+                if 'VGA' in line and ('AMD' in line or 'ATI' in line):
+                    # Extract GPU name from lspci output
+                    parts = line.split(': ', 1)
+                    if len(parts) > 1:
+                        gpu_desc = parts[1].split('[')[0].strip()
+                        return gpu_desc
+            
+            return "AMD GPU"
+            
+        except Exception as e:
+            logger.debug(f"Could not get AMD GPU name: {e}")
+            return "AMD GPU"
     
     async def _get_intel_info(self) -> List[GPUInfo]:
         """Sammelt Intel GPU-Informationen"""
@@ -346,6 +479,14 @@ class GPUAutoScaler:
             'scale_down_threshold': 0.40,  # Scale down wenn Memory < 40% genutzt
             'scale_check_interval': 15.0,  # Sekunden
             'cooldown_period': 30.0,  # Sekunden zwischen Scaling-Aktionen
+            # Thermische Limits
+            'temperature_warning_c': 75.0,  # Warnung bei >75°C
+            'temperature_critical_c': 85.0,  # Kritisch bei >85°C  
+            'temperature_emergency_c': 95.0,  # Notfall bei >95°C
+            # VRAM + Shared Memory Limits
+            'vram_critical_threshold': 0.95,  # 95% VRAM-Nutzung kritisch
+            'vram_emergency_threshold': 0.98,  # 98% VRAM-Nutzung Notfall
+            'shared_memory_threshold': 0.90,  # 90% Shared Memory kritisch
         }
         
         self.last_scale_action = 0.0
@@ -461,6 +602,11 @@ class GPUAutoScaler:
         model_req = self.gpu_monitor.model_requirements.get(self.current_model)
         memory_per_agent = model_req.recommended_memory_mb if model_req else 3072
         
+        # Prüfe kritische Bedingungen zuerst
+        emergency_decision = self._check_emergency_conditions(memory_util, total_memory)
+        if emergency_decision['action'] != 'none':
+            return emergency_decision
+        
         # Kann ein weiterer Agent gestartet werden?
         can_add_agent = (available_memory >= memory_per_agent + self.scaling_config['memory_buffer_mb'] and 
                         self.current_agent_count < self.scaling_config['max_agents'])
@@ -507,6 +653,95 @@ class GPUAutoScaler:
                 }
         
         return {'action': 'none', 'reason': f'Stable: {memory_util:.1f}% memory, {gpu_util:.1f}% GPU'}
+    
+    def _check_emergency_conditions(self, memory_util: float, total_memory: int) -> Dict[str, Any]:
+        """Prüft kritische Bedingungen und erzwingt Notfall-Scaling"""
+        
+        # Sammle kritische Metriken
+        max_temp = self._get_max_gpu_temperature()
+        shared_memory_usage = self._get_shared_memory_usage()
+        
+        # NOTFALL: Temperatur zu hoch
+        if max_temp and max_temp >= self.scaling_config['temperature_emergency_c']:
+            target_agents = max(1, self.current_agent_count // 2)  # Halbiere Agents sofort
+            return {
+                'action': 'emergency_scale_down',
+                'target_count': target_agents,
+                'reason': f'🚨 EMERGENCY: GPU temperature {max_temp:.1f}°C >= {self.scaling_config["temperature_emergency_c"]}°C'
+            }
+        
+        # NOTFALL: VRAM fast voll
+        if memory_util >= self.scaling_config['vram_emergency_threshold'] * 100:
+            target_agents = max(1, self.current_agent_count - 2)  # Entferne 2 Agents
+            return {
+                'action': 'emergency_scale_down', 
+                'target_count': target_agents,
+                'reason': f'🚨 EMERGENCY: VRAM {memory_util:.1f}% >= {self.scaling_config["vram_emergency_threshold"]*100:.1f}%'
+            }
+        
+        # KRITISCH: Hohe Temperatur
+        if max_temp and max_temp >= self.scaling_config['temperature_critical_c']:
+            if self.current_agent_count > self.scaling_config['min_agents']:
+                return {
+                    'action': 'thermal_scale_down',
+                    'target_count': self.current_agent_count - 1,
+                    'reason': f'🌡️ THERMAL: GPU temperature {max_temp:.1f}°C >= {self.scaling_config["temperature_critical_c"]}°C'
+                }
+        
+        # KRITISCH: VRAM kritisch
+        if memory_util >= self.scaling_config['vram_critical_threshold'] * 100:
+            if self.current_agent_count > self.scaling_config['min_agents']:
+                return {
+                    'action': 'memory_scale_down',
+                    'target_count': self.current_agent_count - 1,
+                    'reason': f'💾 CRITICAL: VRAM {memory_util:.1f}% >= {self.scaling_config["vram_critical_threshold"]*100:.1f}%'
+                }
+        
+        # KRITISCH: Shared Memory zu hoch
+        if shared_memory_usage >= self.scaling_config['shared_memory_threshold']:
+            if self.current_agent_count > self.scaling_config['min_agents']:
+                return {
+                    'action': 'shared_memory_scale_down',
+                    'target_count': self.current_agent_count - 1,
+                    'reason': f'🔄 CRITICAL: Shared memory {shared_memory_usage*100:.1f}% >= {self.scaling_config["shared_memory_threshold"]*100:.1f}%'
+                }
+        
+        # WARNUNG: Temperatur hoch - verhindere Scale-Up
+        if max_temp and max_temp >= self.scaling_config['temperature_warning_c']:
+            return {
+                'action': 'thermal_hold',
+                'target_count': self.current_agent_count,
+                'reason': f'🌡️ WARNING: GPU temperature {max_temp:.1f}°C - preventing scale-up'
+            }
+        
+        return {'action': 'none', 'reason': 'No emergency conditions detected'}
+    
+    def _get_max_gpu_temperature(self) -> Optional[float]:
+        """Gibt die höchste GPU-Temperatur zurück"""
+        if not self.gpu_monitor.gpus:
+            return None
+        
+        temperatures = [gpu.temperature for gpu in self.gpu_monitor.gpus if gpu.temperature is not None]
+        return max(temperatures) if temperatures else None
+    
+    def _get_shared_memory_usage(self) -> float:
+        """Berechnet Shared Memory Nutzung (System RAM + GPU VRAM)"""
+        try:
+            # System Memory Usage
+            memory_info = psutil.virtual_memory()
+            system_memory_usage = memory_info.percent / 100.0
+            
+            # GPU Memory Usage
+            gpu_memory_usage = self.gpu_monitor.get_memory_utilization() / 100.0
+            
+            # Gewichteter Durchschnitt (GPU-Memory wichtiger)
+            shared_usage = (system_memory_usage * 0.3) + (gpu_memory_usage * 0.7)
+            
+            return min(1.0, shared_usage)  # Cap bei 100%
+            
+        except Exception as e:
+            logger.warning(f"Could not calculate shared memory usage: {e}")
+            return 0.0
     
     async def _execute_scaling(self, decision: Dict[str, Any]):
         """Führt die Scaling-Aktion aus"""

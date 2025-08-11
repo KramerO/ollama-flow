@@ -81,6 +81,63 @@ async def handle_llm_config_commands(args):
             chooser._create_default_config()
             print("✅ Configuration reset complete!")
         
+        # YAML Configuration Commands
+        elif args.show_yaml_config:
+            print("📋 Current YAML Model Configuration:")
+            print("=" * 50)
+            try:
+                with open("models.yaml", 'r', encoding='utf-8') as f:
+                    yaml_content = f.read()
+                print(yaml_content)
+            except FileNotFoundError:
+                print("❌ models.yaml not found. Run with --reset-yaml-config to create it.")
+            except Exception as e:
+                print(f"❌ Error reading models.yaml: {e}")
+        
+        elif args.edit_yaml_config:
+            import subprocess
+            import os
+            print("📝 Opening models.yaml in default editor...")
+            try:
+                editor = os.environ.get('EDITOR', 'nano')  # fallback to nano
+                subprocess.run([editor, 'models.yaml'])
+                print("✅ YAML configuration editing complete!")
+            except Exception as e:
+                print(f"❌ Error opening editor: {e}")
+                print(f"💡 Try editing models.yaml manually with your preferred editor")
+        
+        elif args.validate_yaml_config:
+            print("🔍 Validating YAML model configuration...")
+            try:
+                import yaml
+                with open("models.yaml", 'r', encoding='utf-8') as f:
+                    yaml_config = yaml.safe_load(f)
+                
+                # Basic validation
+                required_keys = ['allowed_models', 'role_preferences', 'task_preferences']
+                missing_keys = [key for key in required_keys if key not in yaml_config]
+                
+                if missing_keys:
+                    print(f"⚠️ Missing required keys: {missing_keys}")
+                else:
+                    print("✅ YAML configuration is valid!")
+                    print(f"📋 Found {len(yaml_config.get('allowed_models', []))} allowed models")
+                    print(f"👤 Found {len(yaml_config.get('role_preferences', {}))} role preferences")
+                    print(f"📋 Found {len(yaml_config.get('task_preferences', {}))} task preferences")
+                
+            except FileNotFoundError:
+                print("❌ models.yaml not found. Run with --reset-yaml-config to create it.")
+            except yaml.YAMLError as e:
+                print(f"❌ YAML syntax error: {e}")
+            except Exception as e:
+                print(f"❌ Validation error: {e}")
+        
+        elif args.reset_yaml_config:
+            print("🔄 Resetting YAML model configuration to defaults...")
+            chooser._create_default_yaml_config()
+            print("✅ YAML configuration reset complete!")
+            print("📝 Edit models.yaml to customize your model priorities")
+        
     except Exception as e:
         print(f"❌ Error handling LLM config command: {e}")
 
@@ -95,14 +152,21 @@ async def main():
     
     # LLM Chooser configuration options
     parser.add_argument("--list-models", action="store_true", help="List available Ollama models and current role mappings.")
-    parser.add_argument("--config-role", type=str, help="Configure model for specific role (e.g., 'developer:codegemma:7b').")
+    parser.add_argument("--config-role", type=str, help="Configure model for specific role (e.g., 'developer:phi3:latest').")
     parser.add_argument("--show-config", action="store_true", help="Show current LLM chooser configuration.")
     parser.add_argument("--reset-config", action="store_true", help="Reset LLM chooser configuration to defaults.")
+    
+    # YAML Model Configuration options
+    parser.add_argument("--show-yaml-config", action="store_true", help="Show current YAML model configuration.")
+    parser.add_argument("--edit-yaml-config", action="store_true", help="Open models.yaml in default editor for editing.")
+    parser.add_argument("--validate-yaml-config", action="store_true", help="Validate models.yaml configuration file.")
+    parser.add_argument("--reset-yaml-config", action="store_true", help="Reset models.yaml to default configuration.")
     
     args = parser.parse_args()
 
     # Handle LLM Chooser configuration options first
-    if LLM_CHOOSER_AVAILABLE and (args.list_models or args.config_role or args.show_config or args.reset_config):
+    if LLM_CHOOSER_AVAILABLE and (args.list_models or args.config_role or args.show_config or args.reset_config or 
+                                  args.show_yaml_config or args.edit_yaml_config or args.validate_yaml_config or args.reset_yaml_config):
         await handle_llm_config_commands(args)
         return
 

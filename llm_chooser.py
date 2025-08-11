@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from enum import Enum
 import ollama
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +30,108 @@ class LLMChooser:
     Intelligente LLM-Auswahl basierend auf Rollen und Tasks
     """
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, yaml_config_path: Optional[str] = None):
         self.config_path = config_path or "llm_models.json"
+        self.yaml_config_path = yaml_config_path or "models.yaml"
         self.available_models = []
         self.role_model_mapping = {}
         self.task_model_mapping = {}
-        self.default_model = "llama3"
+        self.default_model = "phi3:latest"
         
+        # YAML configuration
+        self.allowed_models = []
+        self.role_preferences = {}
+        self.task_preferences = {}
+        self.model_exclusions = {}
+        self.yaml_settings = {}
+        
+        self._load_yaml_config()
         self._load_config()
         self._detect_available_models()
+    
+    def _load_yaml_config(self):
+        """Lädt die YAML-Konfiguration für erlaubte Modelle"""
+        try:
+            yaml_file = Path(self.yaml_config_path)
+            if yaml_file.exists():
+                with open(yaml_file, 'r', encoding='utf-8') as f:
+                    yaml_config = yaml.safe_load(f)
+                
+                self.allowed_models = yaml_config.get('allowed_models', [])
+                self.role_preferences = yaml_config.get('role_preferences', {})
+                self.task_preferences = yaml_config.get('task_preferences', {})
+                self.model_exclusions = yaml_config.get('exclusions', {})
+                self.yaml_settings = yaml_config.get('settings', {})
+                
+                # Update default model from YAML if available
+                if self.allowed_models:
+                    self.default_model = self.allowed_models[0]
+                
+                logger.info(f"✅ YAML-Konfiguration geladen: {yaml_file}")
+                logger.info(f"📋 Erlaubte Modelle: {self.allowed_models}")
+            else:
+                logger.warning(f"⚠️ YAML-Konfiguration nicht gefunden: {yaml_file}")
+                self._create_default_yaml_config()
+                
+        except Exception as e:
+            logger.error(f"❌ Fehler beim Laden der YAML-Konfiguration: {e}")
+            self._create_default_yaml_config()
+    
+    def _create_default_yaml_config(self):
+        """Erstellt eine Standard-YAML-Konfiguration"""
+        default_yaml = {
+            'allowed_models': [
+                'phi3:latest',
+                'stable-code:3b',
+                'codellama:7b',
+                'llama3:latest',
+                'llama3.2:3b',
+                'mistral:latest',
+                'phi3:mini'
+            ],
+            'role_preferences': {
+                'developer': ['phi3:latest', 'stable-code:3b', 'codellama:7b'],
+                'security_specialist': ['phi3:latest', 'llama3:latest', 'codellama:7b'],
+                'it_architect': ['llama3:latest', 'phi3:latest', 'mistral:latest'],
+                'analyst': ['llama3:latest', 'phi3:latest', 'llama3.2:3b'],
+                'datascientist': ['llama3:latest', 'phi3:latest', 'codellama:7b']
+            },
+            'task_preferences': {
+                'code_development': ['phi3:latest', 'stable-code:3b', 'codellama:7b'],
+                'security_audit': ['phi3:latest', 'llama3:latest', 'codellama:7b'],
+                'architecture_design': ['llama3:latest', 'phi3:latest', 'mistral:latest'],
+                'documentation': ['llama3:latest', 'phi3:latest', 'llama3.2:3b']
+            },
+            'exclusions': {
+                'avoid_for_complex_tasks': ['phi3:mini'],
+                'avoid_for_code': ['phi3:mini']
+            },
+            'settings': {
+                'auto_download': False,
+                'max_model_size_gb': 5.5,
+                'fallback_to_cpu': True,
+                'retry_attempts': 3
+            }
+        }
+        
+        try:
+            with open(self.yaml_config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(default_yaml, f, default_flow_style=False, indent=2)
+            
+            # Load the created config
+            self.allowed_models = default_yaml['allowed_models']
+            self.role_preferences = default_yaml['role_preferences']
+            self.task_preferences = default_yaml['task_preferences']
+            self.model_exclusions = default_yaml['exclusions']
+            self.yaml_settings = default_yaml['settings']
+            
+            if self.allowed_models:
+                self.default_model = self.allowed_models[0]
+            
+            logger.info(f"✅ Standard-YAML-Konfiguration erstellt: {self.yaml_config_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ Fehler beim Erstellen der Standard-YAML-Konfiguration: {e}")
     
     def _load_config(self):
         """Lädt die LLM-Konfiguration aus JSON-Datei"""
@@ -49,7 +143,7 @@ class LLMChooser:
                 
                 self.role_model_mapping = config.get('role_mapping', {})
                 self.task_model_mapping = config.get('task_mapping', {})
-                self.default_model = config.get('default_model', 'llama3')
+                self.default_model = config.get('default_model', 'phi3:latest')
                 
                 logger.info(f"✅ LLM-Konfiguration geladen: {config_file}")
             else:
@@ -62,10 +156,10 @@ class LLMChooser:
     def _create_default_config(self):
         """Erstellt Standard-LLM-Konfiguration"""
         default_config = {
-            "default_model": "llama3",
+            "default_model": "phi3:latest",
             "role_mapping": {
                 "developer": {
-                    "primary": "codegemma:7b",
+                    "primary": "phi3:latest",
                     "fallback": ["codellama:7b", "llama3", "phi3:mini"]
                 },
                 "it_architect": {
@@ -87,7 +181,7 @@ class LLMChooser:
             },
             "task_mapping": {
                 "code_development": {
-                    "preferred_models": ["codegemma:7b", "codellama:7b", "llama3"],
+                    "preferred_models": ["phi3:latest", "codellama:7b", "llama3"],
                     "avoid_models": ["phi3:mini"]
                 },
                 "architecture_design": {
@@ -108,6 +202,11 @@ class LLMChooser:
                 }
             },
             "model_capabilities": {
+                "stable-code:3b": {
+                    "strengths": ["code_generation", "debugging", "code_completion"],
+                    "languages": ["python", "javascript", "java", "cpp", "go", "rust", "c#"],
+                    "context_size": 4096
+                },
                 "codegemma:7b": {
                     "strengths": ["code_generation", "debugging", "code_review"],
                     "languages": ["python", "javascript", "java", "cpp", "go", "rust"],
@@ -269,7 +368,7 @@ class LLMChooser:
     
     def choose_model_for_role(self, role: str, task_context: Optional[str] = None) -> str:
         """
-        Wählt das beste LLM basierend auf der Drohnen-Rolle
+        Wählt das beste LLM basierend auf der Drohnen-Rolle und YAML-Konfiguration
         
         Args:
             role: Drohnen-Rolle (z.B. 'developer', 'security_specialist')
@@ -280,42 +379,56 @@ class LLMChooser:
         """
         role_lower = role.lower()
         
-        # Prüfe Rollen-spezifische Zuordnung
+        # 1. YAML-basierte Rollen-Präferenzen (höchste Priorität)
+        if role_lower in self.role_preferences:
+            role_models = self.role_preferences[role_lower]
+            for model in role_models:
+                if self._is_model_available_and_allowed(model):
+                    logger.info(f"🎯 Gewähltes Modell für {role}: {model} (YAML role preference)")
+                    return model
+        
+        # 2. YAML-basierte Task-Präferenzen
+        if task_context:
+            task_model = self._choose_by_yaml_task_context(task_context)
+            if task_model:
+                logger.info(f"🎯 Gewähltes Modell für {role}: {task_model} (YAML task preference)")
+                return task_model
+        
+        # 3. Allgemeine YAML-erlaubte Modelle (in Prioritätsreihenfolge)
+        for model in self.allowed_models:
+            if self._is_model_available_and_allowed(model):
+                logger.info(f"🎯 Gewähltes Modell für {role}: {model} (YAML priority order)")
+                return model
+        
+        # 4. Fallback zu JSON-Konfiguration (Legacy-Support)
         if role_lower in self.role_model_mapping:
             role_config = self.role_model_mapping[role_lower]
             
             # Versuche primäres Modell
             primary_model = role_config.get('primary')
             if primary_model and self._is_model_available(primary_model):
-                logger.info(f"🎯 Gewähltes Modell für {role}: {primary_model} (primär)")
+                logger.info(f"🎯 Gewähltes Modell für {role}: {primary_model} (JSON fallback)")
                 return primary_model
             
             # Versuche Fallback-Modelle
             fallback_models = role_config.get('fallback', [])
             for model in fallback_models:
                 if self._is_model_available(model):
-                    logger.info(f"🎯 Gewähltes Modell für {role}: {model} (fallback)")
+                    logger.info(f"🎯 Gewähltes Modell für {role}: {model} (JSON fallback)")
                     return model
         
-        # Task-basierte Auswahl wenn verfügbar
-        if task_context:
-            task_model = self._choose_by_task_context(task_context)
-            if task_model:
-                logger.info(f"🎯 Gewähltes Modell für {role} (task-based): {task_model}")
-                return task_model
-        
-        # Standard-Modell als letzter Fallback
+        # 5. Standard-Modell als letzter Fallback
         if self._is_model_available(self.default_model):
             logger.info(f"🎯 Gewähltes Modell für {role}: {self.default_model} (default)")
             return self.default_model
         
-        # Notfall: Erstes verfügbares Modell
+        # 6. Notfall: Erstes verfügbares Modell
         if self.available_models:
             fallback = self.available_models[0]
             logger.warning(f"⚠️ Gewähltes Modell für {role}: {fallback} (emergency fallback)")
             return fallback
         
-        # Absoluter Notfall
+        # 7. Absoluter Notfall
         logger.error(f"❌ Kein verfügbares Modell für {role} gefunden, verwende llama3")
         return "llama3"
     
@@ -347,6 +460,40 @@ class LLMChooser:
                         return model
         
         return None
+    
+    def _choose_by_yaml_task_context(self, task_context: str) -> Optional[str]:
+        """Wählt Modell basierend auf YAML Task-Präferenzen"""
+        task_lower = task_context.lower()
+        
+        # Erkenne Task-Type basierend auf Keywords
+        task_type = None
+        
+        if any(keyword in task_lower for keyword in ['code', 'implement', 'programming', 'function', 'class', 'script']):
+            task_type = 'code_development'
+        elif any(keyword in task_lower for keyword in ['security', 'vulnerability', 'secure', 'attack', 'defense', 'pentest']):
+            task_type = 'security_audit'
+        elif any(keyword in task_lower for keyword in ['architecture', 'design', 'structure', 'pattern']):
+            task_type = 'architecture_design'
+        elif any(keyword in task_lower for keyword in ['analyze', 'data', 'statistics', 'metrics']):
+            task_type = 'data_analysis'
+        elif any(keyword in task_lower for keyword in ['document', 'readme', 'explanation', 'guide']):
+            task_type = 'documentation'
+        
+        if task_type and task_type in self.task_preferences:
+            preferred_models = self.task_preferences[task_type]
+            for model in preferred_models:
+                if self._is_model_available_and_allowed(model):
+                    return model
+        
+        return None
+    
+    def _is_model_available_and_allowed(self, model_name: str) -> bool:
+        """Prüft ob ein Modell verfügbar UND in der YAML-Liste erlaubt ist"""
+        if not model_name in self.allowed_models:
+            logger.debug(f"🚫 Modell {model_name} nicht in erlaubten Modellen")
+            return False
+        
+        return self._is_model_available(model_name, auto_download=self.yaml_settings.get('auto_download', False))
     
     def _is_model_available(self, model_name: str, auto_download: bool = False) -> bool:
         """Prüft ob ein Modell verfügbar ist (Download standardmäßig deaktiviert)"""

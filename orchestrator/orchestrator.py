@@ -142,12 +142,19 @@ Provide only the English translation, no additional explanation:
             print(f"[Orchestrator] German language detected, translating...")
             processed_prompt = await self._translate_german_to_english(prompt)
         
-        # For now, directly send to a QueenAgent (assuming one exists)
-        queen_agents = self.get_agents_by_type(BaseAgent) # Placeholder, will be QueenAgent
+        # Find the main Queen agent (enhanced or regular)
+        from agents.enhanced_queen_agent import EnhancedQueenAgent
+        from agents.queen_agent import QueenAgent
+        
+        # Try Enhanced Queen first, then regular Queen
+        queen_agents = self.get_agents_by_type(EnhancedQueenAgent)
+        if not queen_agents:
+            queen_agents = self.get_agents_by_type(QueenAgent)
+        
         if not queen_agents:
             return "Error: No QueenAgent registered."
         
-        target_receiver_id = queen_agents[0].agent_id # Assuming the first registered agent is the Queen
+        target_receiver_id = queen_agents[0].agent_id # Use the main Queen Agent
 
         request_id = f"request-{self.request_counter}"
         self.request_counter += 1

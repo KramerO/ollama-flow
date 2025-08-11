@@ -351,9 +351,11 @@ python3 main.py \
 --arch CENTRALIZED       # Optimal für sequenzielle Aufgaben
 --arch FULLY_CONNECTED   # Ideal für kollaborative Projekte
 
-# Modell-Auswahl (nur verfügbare Modelle verwenden!)
---model codellama:7b     # Empfohlen für Coding-Aufgaben, 8GB RAM
---model llama3:latest    # Vielseitig für allgemeine Aufgaben, 8GB RAM
+# Modell-Konfiguration (YAML-basiert - siehe models.yaml)
+--model phi3:latest      # Standard-Modell (höchste Priorität in YAML)
+--model codellama:7b     # Manuell überschreiben falls gewünscht
+--show-yaml-config       # Aktuelle Modell-Konfiguration anzeigen
+--edit-yaml-config       # models.yaml bearbeiten für Prioritäten
 
 # Drone-Anzahl (CLI verwendet --drones)
 --drones 2              # Schnelle Tests
@@ -373,14 +375,153 @@ python3 main.py \
 ### **Performance-Tuning:**
 ```bash
 # CLI - Optimal für die meisten Aufgaben
-ollama-flow run "Task" --drones 4 --arch HIERARCHICAL --model codellama:7b
+ollama-flow run "Task" --drones 4 --arch HIERARCHICAL --model phi3:latest
 
 # CLI - Schnelle Tests
-ollama-flow run "Task" --drones 2 --arch CENTRALIZED --model llama3:latest
+ollama-flow run "Task" --drones 2 --arch CENTRALIZED --model phi3:latest
 
 # Framework direkt - Maximale Kontrolle
 python3 main.py --task "Task" --drone-count 6 --architecture-type HIERARCHICAL --ollama-model codellama:7b
 ```
+
+## 🎯 **YAML-basierte Modell-Konfiguration**
+
+Ollama Flow verwendet jetzt eine benutzerfreundliche YAML-Konfiguration für die Modell-Auswahl. Die Modelle werden nach Priorität (von oben nach unten) ausgewählt.
+
+### **Konfiguration verwalten:**
+
+```bash
+# Aktuelle YAML-Konfiguration anzeigen
+ollama-flow models show-yaml
+
+# Interaktive YAML-Konfiguration (empfohlen!)
+ollama-flow models configure-yaml
+
+# models.yaml im Editor öffnen
+ollama-flow models edit-yaml
+
+# YAML-Konfiguration validieren
+ollama-flow models validate-yaml
+
+# Standard-Konfiguration wiederherstellen
+ollama-flow models reset-yaml
+```
+
+### **models.yaml Struktur:**
+
+```yaml
+# Erlaubte Modelle (Prioritäts-Reihenfolge: oben = höchste Priorität)
+allowed_models:
+  - phi3:latest          # Prio 1 - Standard für alle Tasks
+  - stable-code:3b       # Prio 2 - Code-spezialisiert
+  - codellama:7b         # Prio 3 - Code-Generation
+  - llama3:latest        # Prio 4 - Allzweck-Modell
+  - llama3.2:3b          # Prio 5 - Kompaktere Alternative
+  - mistral:latest       # Prio 6 - Alternative
+  - phi3:mini            # Prio 7 - Backup (niedrigste Priorität)
+
+# Rollen-spezifische Präferenzen (überschreibt allgemeine Priorität)
+role_preferences:
+  developer:
+    - phi3:latest         # Beste Performance für Entwicklung
+    - stable-code:3b      # Code-spezialisiert
+    - codellama:7b        # Fallback für Code
+    
+  security_specialist:
+    - phi3:latest         # Gut für Security-Analysis
+    - llama3:latest       # Starker Reasoning
+    - codellama:7b        # Code-Review Fähigkeiten
+
+# Task-spezifische Präferenzen (basierend auf Keywords im Task)
+task_preferences:
+  code_development:       # Keywords: code, implement, programming, script
+    - phi3:latest
+    - stable-code:3b
+    - codellama:7b
+    
+  security_audit:         # Keywords: security, vulnerability, pentest
+    - phi3:latest
+    - llama3:latest
+    - codellama:7b
+
+# Konfigurationseinstellungen
+settings:
+  auto_download: false    # Keine automatischen Downloads
+  max_model_size_gb: 5.5  # Maximale Modellgröße
+  fallback_to_cpu: true   # CPU-Fallback bei GPU-Problemen
+```
+
+### **Modell-Auswahl-Logik:**
+
+1. **Rollen-Präferenzen** (höchste Priorität)
+   - z.B. `developer` → `phi3:latest`
+
+2. **Task-Präferenzen** 
+   - z.B. "pentest tool" → `security_audit` → `phi3:latest`
+
+3. **Allgemeine Prioritätsliste**
+   - `allowed_models` von oben nach unten
+
+4. **Verfügbarkeits-Check**
+   - Nur installierte und funktionierende Modelle
+
+### **Beispiele:**
+
+```bash
+# Verwendet automatisch phi3:latest (höchste Priorität)
+ollama-flow run "Create a web scraper"
+
+# Developer-Rolle verwendet phi3:latest (role_preferences)
+ollama-flow run "Implement REST API" --drones 2
+
+# Security-Task verwendet phi3:latest (task_preferences) 
+ollama-flow run "Create pentest tool for websites" --drones 1
+
+# Manueller Override (überschreibt YAML-Konfiguration)
+ollama-flow run "Task" --model codellama:7b --drones 1
+```
+
+### **Anpassung der Prioritäten:**
+
+```bash
+# 1. Interaktive Konfiguration (einfachste Methode)
+ollama-flow models configure-yaml
+
+# 2. Oder manuell im Editor
+ollama-flow models edit-yaml
+
+# 3. Konfiguration validieren
+ollama-flow models validate-yaml
+
+# 4. Testen
+ollama-flow run "test task" --drones 1
+```
+
+### **Interaktive YAML-Konfiguration:**
+
+Die neue `configure-yaml` Funktion bietet ein benutzerfreundliches Menü:
+
+```
+🎛️  Interactive YAML Model Configuration
+==================================================
+
+🎯 What would you like to configure?
+1. 📋 Reorder model priorities
+2. 👤 Configure role preferences  
+3. 📋 Configure task preferences
+4. ⚙️  Configure settings
+5. 👀 Show current configuration
+6. 💾 Save and exit
+7. ❌ Exit without saving
+```
+
+**Features der interaktiven Konfiguration:**
+- ✅ **Modell-Prioritäten verschieben** (rauf/runter/entfernen/hinzufügen)
+- ✅ **Rollen-Präferenzen konfigurieren** pro Rolle (developer, security_specialist, etc.)
+- ✅ **Task-Präferenzen festlegen** (code_development, security_audit, etc.)
+- ✅ **Einstellungen ändern** (auto_download, max_size, cpu_fallback)
+- ✅ **Live-Vorschau** der aktuellen Konfiguration
+- ✅ **Validierung** aller Eingaben
 
 ## 🧪 **Testing**
 
