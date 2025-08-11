@@ -183,8 +183,8 @@ Examples:
     def load_configuration(self, args: argparse.Namespace) -> Dict[str, Any]:
         """Load configuration from environment and arguments"""
         config = {
-            # Worker configuration
-            'worker_count': args.workers or int(os.getenv("OLLAMA_WORKER_COUNT", "4")),
+            # Drone configuration  
+            'worker_count': args.workers or int(os.getenv("OLLAMA_DRONE_COUNT", "4")),
             'sub_queen_count': args.sub_queens or int(os.getenv("OLLAMA_SUB_QUEEN_COUNT", "2")),
             'architecture_type': args.arch or os.getenv("OLLAMA_ARCHITECTURE_TYPE", "HIERARCHICAL"),
             
@@ -280,38 +280,39 @@ Examples:
                 agent_id="enhanced-queen-1",
                 name="Enhanced Main Queen",
                 architecture_type=self.config['architecture_type'],
-                model=self.config['model']
+                model=self.config['model'],
+                project_folder=self.config['project_folder']
             )
             # Don't initialize queen yet - wait until all agents are registered
             agents_info['queen'] = queen_agent
             agents_info['total_agents'] += 1
             
-            # Create Worker Agents (Secure or Standard)
-            worker_agents = []
-            WorkerClass = SecureWorkerAgent if self.config['secure_mode'] else SecureWorkerAgent  # Always use secure
+            # Create Drone Agents (Secure or Standard)
+            drone_agents = []
+            DroneClass = SecureWorkerAgent if self.config['secure_mode'] else SecureWorkerAgent  # Always use secure
             
             for i in range(self.config['worker_count']):
-                worker = WorkerClass(
-                    agent_id=f"secure-worker-{i+1}",
-                    name=f"Secure Worker {i+1}",
+                drone = DroneClass(
+                    agent_id=f"secure-drone-{i+1}",
+                    name=f"Secure Drone {i+1}",
                     model=self.config['model'],
                     project_folder_path=self.config['project_folder']
                 )
-                worker_agents.append(worker)
-                orchestrator.register_agent(worker)
+                drone_agents.append(drone)
+                orchestrator.register_agent(drone)
                 agents_info['total_agents'] += 1
                 
-            agents_info['workers'] = worker_agents
+            agents_info['drones'] = drone_agents
             
             # Create Sub-Queen Agents for Hierarchical Architecture
             if self.config['architecture_type'] == 'HIERARCHICAL':
                 sub_queen_agents = []
                 sub_queen_groups = [[] for _ in range(self.config['sub_queen_count'])]
                 
-                # Distribute workers among sub-queens
-                for i, worker in enumerate(worker_agents):
+                # Distribute drones among sub-queens
+                for i, drone in enumerate(drone_agents):
                     group_index = i % self.config['sub_queen_count']
-                    sub_queen_groups[group_index].append(worker)
+                    sub_queen_groups[group_index].append(drone)
                 
                 # Create sub-queen agents
                 for i in range(self.config['sub_queen_count']):
@@ -333,8 +334,8 @@ Examples:
             
             logger.info(f"Created {agents_info['total_agents']} enhanced agents:")
             logger.info(f"  - Queen: 1")
-            logger.info(f"  - Sub-Queens: {len(agents_info['sub_queens'])}")
-            logger.info(f"  - Workers: {len(agents_info['workers'])}")
+            logger.info(f"  - Sub-Queens: {len(agents_info.get('sub_queens', []))}")
+            logger.info(f"  - Drones: {len(agents_info['drones'])}")
             
             return agents_info
             
@@ -438,17 +439,17 @@ Examples:
             print(f"Total Agents: {total_agents}")
             print(f"Parallel Efficiency: {execution_result['execution_time'] / total_agents:.2f}s per agent")
             
-            # Security metrics (if secure workers)
-            if self.config['secure_mode'] and agents_info['workers']:
+            # Security metrics (if secure drones)
+            if self.config['secure_mode'] and agents_info.get('drones', []):
                 print("\n🔒 SECURITY METRICS")
                 print("-" * 40)
                 
                 total_executed = 0
                 total_blocked = 0
                 
-                for worker in agents_info['workers']:
-                    if hasattr(worker, 'get_security_summary'):
-                        summary = worker.get_security_summary()
+                for drone in agents_info['drones']:
+                    if hasattr(drone, 'get_security_summary'):
+                        summary = drone.get_security_summary()
                         total_executed += summary['commands_executed']
                         total_blocked += summary['commands_blocked']
                         

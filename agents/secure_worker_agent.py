@@ -91,14 +91,19 @@ class SecureWorkerAgent(BaseAgent):
             if not resolved_path.exists():
                 resolved_path.mkdir(parents=True, exist_ok=True)
                 
-            # Ensure it's not a system directory
-            forbidden_paths = ['/etc', '/var', '/usr', '/root', '/home', '/sys', '/proc', '/dev']
+            # Ensure it's not a system directory (allow user home directories for projects)
+            forbidden_paths = ['/etc', '/var', '/usr', '/root', '/sys', '/proc', '/dev']
             path_str = str(resolved_path)
             
-            for forbidden in forbidden_paths:
-                if path_str.startswith(forbidden):
-                    logger.warning(f"Forbidden project path: {path_str}")
-                    return None
+            # Allow user project directories under /home/username/projects
+            if path_str.startswith('/home/') and '/projects/' in path_str:
+                # Allow user project directories
+                pass
+            else:
+                for forbidden in forbidden_paths:
+                    if path_str.startswith(forbidden):
+                        logger.warning(f"Forbidden project path: {path_str}")
+                        return None
                     
             return str(resolved_path)
             

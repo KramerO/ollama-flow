@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import concurrent.futures
 
 from agents.base_agent import BaseAgent, AgentMessage
-from agents.worker_agent import WorkerAgent
+from agents.secure_worker_agent import SecureWorkerAgent
 from agents.enhanced_queen_agent import TaskNode, TaskPriority, TaskStatus
 
 # Configure logging
@@ -19,7 +19,7 @@ class EnhancedSubQueenAgent(BaseAgent):
     def __init__(self, agent_id: str, name: str, model: str = "llama3"):
         super().__init__(agent_id, name)
         self.model = model
-        self.group_worker_agents: List[WorkerAgent] = []
+        self.group_worker_agents: List[SecureWorkerAgent] = []
         
         # Enhanced task management
         self.task_queue: List[TaskNode] = []
@@ -37,14 +37,14 @@ class EnhancedSubQueenAgent(BaseAgent):
         self.current_request_id: Optional[str] = None
         self.parent_queen_id: Optional[str] = None
 
-    def initialize_group_agents(self, agents: List[WorkerAgent]):
-        """Initialize worker agents with performance tracking"""
+    def initialize_group_agents(self, agents: List[SecureWorkerAgent]):
+        """Initialize drone agents with performance tracking"""
         self.group_worker_agents = agents
-        logger.info(f"SubQueenAgent {self.name} initialized with {len(agents)} WorkerAgents.")
+        logger.info(f"SubQueenAgent {self.name} initialized with {len(agents)} DroneAgents.")
         
-        # Initialize performance tracking for each worker
-        for worker in agents:
-            self.worker_performance[worker.agent_id] = {
+        # Initialize performance tracking for each drone
+        for drone in agents:
+            self.worker_performance[drone.agent_id] = {
                 'completed_tasks': 0,
                 'failed_tasks': 0,
                 'average_duration': 0.0,
@@ -412,7 +412,7 @@ class EnhancedSubQueenAgent(BaseAgent):
             self.failed_tasks.append(task_node.id)
 
     async def receive_message(self, message: AgentMessage):
-        """Enhanced message handling with parallel processing"""
+        """Enhanced message handling with availability checking and fallbacks"""
         logger.info(f"SubQueenAgent {self.name} received {message.message_type} from {message.sender_id}")
         
         # Store current request context
@@ -420,8 +420,18 @@ class EnhancedSubQueenAgent(BaseAgent):
         
         if message.message_type == "sub-task-to-subqueen":
             try:
-                # Extract parent queen ID (remove hardcoded dependency)
+                # Extract parent queen ID
                 self.parent_queen_id = message.sender_id
+                
+                # Check agent availability BEFORE processing
+                available_drones = self._check_worker_availability()
+                
+                if not available_drones:
+                    # No drones available - use fallback mechanism
+                    await self._handle_no_workers_available(message)
+                    return
+                
+                logger.info(f"SubQueen {self.name}: {len(available_drones)}/{len(self.group_worker_agents)} drones available")
                 
                 # Enhanced task decomposition
                 task_nodes = await self._enhanced_decompose_task(message.content)
@@ -450,6 +460,132 @@ class EnhancedSubQueenAgent(BaseAgent):
         elif message.message_type in ["response", "error"]:
             # Handle worker completion
             await self._handle_worker_completion(message)
+    
+    def _check_worker_availability(self) -> List[str]:
+        """Check which drones are currently available"""
+        available_drones = []
+        
+        for drone in self.group_worker_agents:
+            drone_id = drone.agent_id
+            performance = self.worker_performance.get(drone_id, {})
+            
+            # Consider drone available if:
+            # 1. Current load is not at maximum
+            # 2. Reliability score is acceptable
+            current_load = performance.get('current_load', 0)
+            reliability = performance.get('reliability_score', 1.0)
+            
+            if current_load < 3 and reliability > 0.3:  # Max 3 tasks, min 30% reliability
+                available_drones.append(drone_id)
+        
+        return available_drones
+    
+    async def _handle_no_workers_available(self, message: AgentMessage):
+        """Handle scenario when no drones are available - implement fallback mechanisms"""
+        logger.warning(f"⚠️ SubQueen {self.name}: No drones available for task")
+        
+        # Fallback strategy 1: Wait briefly and retry
+        logger.info("Trying fallback strategy 1: Wait and retry...")
+        await asyncio.sleep(2.0)  # Wait 2 seconds
+        
+        available_drones = self._check_worker_availability()
+        if available_drones:
+            logger.info(f"✅ After waiting: {len(available_drones)} drones became available")
+            # Retry task processing
+            await self.receive_message(message)
+            return
+        
+        # Fallback strategy 2: Reset overloaded drones with lower reliability
+        logger.info("Trying fallback strategy 2: Reset overloaded drones...")
+        reset_count = self._reset_overloaded_workers()
+        
+        if reset_count > 0:
+            logger.info(f"✅ Reset {reset_count} overloaded drones")
+            # Retry task processing
+            available_drones = self._check_worker_availability()
+            if available_drones:
+                await self.receive_message(message)
+                return
+        
+        # Fallback strategy 3: Lower standards temporarily
+        logger.info("Trying fallback strategy 3: Lower reliability standards...")
+        emergency_drones = self._get_emergency_workers()
+        
+        if emergency_drones:
+            logger.info(f"✅ Found {len(emergency_drones)} emergency drones")
+            # Temporarily update drone availability
+            for drone_id in emergency_drones:
+                if drone_id in self.worker_performance:
+                    self.worker_performance[drone_id]['current_load'] = max(0, 
+                        self.worker_performance[drone_id]['current_load'] - 1)
+            
+            # Retry task processing
+            await self.receive_message(message)
+            return
+        
+        # Final fallback: Report error back to orchestrator with detailed info
+        error_msg = {
+            "error": "No DroneAgents available",
+            "sub_queen": self.name,
+            "total_drones": len(self.group_worker_agents),
+            "drone_status": {
+                drone_id: {
+                    "current_load": perf.get("current_load", 0),
+                    "reliability": perf.get("reliability_score", 1.0),
+                    "failed_tasks": perf.get("failed_tasks", 0)
+                }
+                for drone_id, perf in self.worker_performance.items()
+            },
+            "fallback_attempts": ["wait_retry", "reset_overloaded", "lower_standards"],
+            "suggestion": "Consider redistributing task to another Sub-Queen or reducing task complexity"
+        }
+        
+        await self.send_message(
+            message.sender_id,
+            "group-response",
+            {
+                "from_sub_queen": self.agent_id,
+                "original_sender": self.agent_id,
+                "type": "error",
+                "content": f"No DroneAgents in group for Sub Queen {self.name}: {json.dumps(error_msg)}"
+            },
+            message.request_id
+        )
+    
+    def _reset_overloaded_workers(self) -> int:
+        """Reset drones that are overloaded but have low reliability"""
+        reset_count = 0
+        
+        for drone_id, performance in self.worker_performance.items():
+            current_load = performance.get('current_load', 0)
+            reliability = performance.get('reliability_score', 1.0)
+            failed_tasks = performance.get('failed_tasks', 0)
+            
+            # Reset if overloaded AND (low reliability OR many failures)
+            if current_load >= 3 and (reliability < 0.6 or failed_tasks > 5):
+                logger.info(f"🔄 Resetting overloaded drone {drone_id} (load: {current_load}, reliability: {reliability:.2f})")
+                performance['current_load'] = 0
+                performance['reliability_score'] = min(1.0, reliability + 0.1)  # Small boost
+                reset_count += 1
+        
+        return reset_count
+    
+    def _get_emergency_workers(self) -> List[str]:
+        """Get drones with very low standards for emergency situations"""
+        emergency_drones = []
+        
+        for drone in self.group_worker_agents:
+            drone_id = drone.agent_id
+            performance = self.worker_performance.get(drone_id, {})
+            
+            # Emergency standards: accept almost any drone except completely broken ones
+            current_load = performance.get('current_load', 0)
+            reliability = performance.get('reliability_score', 1.0)
+            
+            if current_load < 5 and reliability > 0.1:  # Very low standards
+                emergency_drones.append(drone_id)
+        
+        return emergency_drones
 
     async def _handle_worker_completion(self, message: AgentMessage):
         """Handle worker task completion"""
@@ -586,6 +722,27 @@ class EnhancedSubQueenAgent(BaseAgent):
         # Reset worker loads
         for worker_id in self.worker_performance:
             self.worker_performance[worker_id]['current_load'] = 0
+
+    def get_agent_availability_status(self) -> Dict[str, Any]:
+        """Get current availability status for queen agent"""
+        total_agents = len(self.group_worker_agents)
+        available_agents = len(self._check_worker_availability())
+        
+        utilization_rate = 0.0
+        if total_agents > 0:
+            busy_agents = total_agents - available_agents
+            utilization_rate = busy_agents / total_agents
+        
+        return {
+            'total_agents': total_agents,
+            'available_agents': available_agents,
+            'busy_agents': total_agents - available_agents,
+            'utilization_rate': utilization_rate,
+            'active_tasks': len(self.active_tasks),
+            'completed_tasks': len(self.completed_tasks),
+            'failed_tasks': len(self.failed_tasks),
+            'performance_summary': self.worker_performance
+        }
 
     def __del__(self):
         """Cleanup executor on destruction"""

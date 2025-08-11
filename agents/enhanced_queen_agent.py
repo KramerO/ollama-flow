@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -53,10 +54,11 @@ class TaskNode:
 class EnhancedQueenAgent(BaseAgent):
     """Enhanced Queen Agent with parallel task decomposition and intelligent scheduling"""
     
-    def __init__(self, agent_id: str, name: str, architecture_type: str, model: str = "llama3"):
+    def __init__(self, agent_id: str, name: str, architecture_type: str, model: str = "llama3", project_folder: str = None):
         super().__init__(agent_id, name)
         self.architecture_type = architecture_type
         self.model = model
+        self.project_folder = project_folder or os.getcwd()
         self.sub_queen_agents: List[BaseAgent] = []
         self.drone_agents: List[BaseAgent] = []
         self.drone_roles: Dict[str, DroneRole] = {}  # agent_id -> role mapping
@@ -75,11 +77,21 @@ class EnhancedQueenAgent(BaseAgent):
         self.llm_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
 
     def initialize_agents(self):
-        """Initialize available agents and their capabilities"""
+        """Initialize available agents and their capabilities with load balancing"""
         if self.orchestrator:
             if self.architecture_type == 'HIERARCHICAL':
-                self.sub_queen_agents = self.orchestrator.get_agents_by_type(SubQueenAgent)
+                # Enhanced Sub-Queen discovery and initialization
+                from agents.enhanced_sub_queen_agent import EnhancedSubQueenAgent
+                self.sub_queen_agents = self.orchestrator.get_agents_by_type(EnhancedSubQueenAgent)
+                if not self.sub_queen_agents:
+                    # Fallback to regular SubQueenAgent
+                    self.sub_queen_agents = self.orchestrator.get_agents_by_type(SubQueenAgent)
+                
                 logger.info(f"QueenAgent {self.name} found {len(self.sub_queen_agents)} SubQueenAgents.")
+                
+                # Initialize Sub-Queen performance tracking
+                self._initialize_subqueen_performance_tracking()
+                
             elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
                 # Try SecureDroneAgent first, fallback to DroneAgent
                 self.drone_agents = self.orchestrator.get_agents_by_type(SecureDroneAgent)
@@ -101,6 +113,258 @@ class EnhancedQueenAgent(BaseAgent):
                         'reliability_score': 1.0,
                         'role': role.value
                     }
+    
+    def _initialize_subqueen_performance_tracking(self):
+        """Initialize performance tracking for Sub-Queens"""
+        for subqueen in self.sub_queen_agents:
+            self.worker_performance[subqueen.agent_id] = {
+                'completed_tasks': 0,
+                'failed_tasks': 0,
+                'average_duration': 0.0,
+                'current_load': 0,
+                'reliability_score': 1.0,
+                'last_task_time': 0.0,
+                'worker_count': 0,  # Number of workers managed by this sub-queen
+                'available_workers': 0,  # Currently available workers
+                'skills': ['general', 'management', 'coordination'],
+                'response_time': 0.0
+            }
+            
+        logger.info(f"Initialized performance tracking for {len(self.sub_queen_agents)} Sub-Queens")
+    
+    def _get_best_subqueen_for_task(self, task_node: TaskNode) -> Optional[str]:
+        """Select best Sub-Queen for task using intelligent load balancing"""
+        if not self.sub_queen_agents:
+            return None
+        
+        # Get availability status from all Sub-Queens
+        subqueen_scores = []
+        
+        for subqueen in self.sub_queen_agents:
+            subqueen_id = subqueen.agent_id
+            performance = self.worker_performance.get(subqueen_id, {})
+            
+            # Get real-time availability if Sub-Queen supports it
+            availability_info = None
+            if hasattr(subqueen, 'get_agent_availability_status'):
+                try:
+                    availability_info = subqueen.get_agent_availability_status()
+                    # Update our tracking with real-time data
+                    performance['available_workers'] = availability_info.get('available_agents', 0)
+                    performance['worker_count'] = availability_info.get('total_agents', 0)
+                    performance['utilization_rate'] = availability_info.get('utilization_rate', 0.0)
+                except Exception as e:
+                    logger.debug(f"Could not get availability status from Sub-Queen {subqueen_id}: {e}")
+            
+            # Skip Sub-Queens with no available workers
+            available_workers = performance.get('available_workers', 1)  # Default to 1 if unknown
+            if available_workers <= 0:
+                logger.debug(f"Skipping Sub-Queen {subqueen_id}: no available workers")
+                continue
+            
+            # Calculate load balancing score
+            current_load = performance.get('current_load', 0)
+            reliability = performance.get('reliability_score', 1.0)
+            worker_count = performance.get('worker_count', 1)
+            utilization_rate = performance.get('utilization_rate', current_load / max(worker_count, 1))
+            
+            # Score factors:
+            # 1. Available capacity (more available workers = higher score)
+            capacity_score = available_workers / max(worker_count, 1)
+            
+            # 2. Load balance (less utilized = higher score) 
+            load_score = 1.0 - min(utilization_rate, 1.0)
+            
+            # 3. Reliability (historical success rate)
+            reliability_score = reliability
+            
+            # 4. Response time (faster = higher score)
+            response_time = performance.get('response_time', 1.0)
+            speed_score = 1.0 / max(response_time, 0.1)
+            
+            # 5. Skill match for task
+            skill_score = self._calculate_subqueen_skill_match(task_node, performance)
+            
+            # Weighted final score
+            final_score = (
+                capacity_score * 0.3 +      # 30% capacity
+                load_score * 0.25 +         # 25% load balance
+                reliability_score * 0.2 +   # 20% reliability
+                speed_score * 0.15 +        # 15% speed
+                skill_score * 0.1           # 10% skill match
+            )
+            
+            subqueen_scores.append((subqueen_id, final_score, {
+                'capacity_score': capacity_score,
+                'load_score': load_score,
+                'reliability_score': reliability_score,
+                'available_workers': available_workers,
+                'utilization_rate': utilization_rate
+            }))
+        
+        if not subqueen_scores:
+            logger.warning("No available Sub-Queens found for task assignment")
+            return None
+        
+        # Sort by score (highest first)
+        subqueen_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        best_subqueen = subqueen_scores[0]
+        best_id, best_score, best_metrics = best_subqueen
+        
+        logger.info(f"Selected Sub-Queen {best_id} for task (score: {best_score:.3f}, "
+                   f"available workers: {best_metrics['available_workers']}, "
+                   f"utilization: {best_metrics['utilization_rate']:.2%})")
+        
+        # Update load tracking
+        self.worker_performance[best_id]['current_load'] += 1
+        self.worker_performance[best_id]['last_task_time'] = asyncio.get_event_loop().time()
+        
+        return best_id
+    
+    def _calculate_subqueen_skill_match(self, task_node: TaskNode, subqueen_performance: Dict[str, Any]) -> float:
+        """Calculate how well a Sub-Queen's skills match the task requirements"""
+        subqueen_skills = set(subqueen_performance.get('skills', ['general']))
+        required_skills = set(task_node.required_skills)
+        
+        if not required_skills:
+            return 1.0  # No specific requirements
+        
+        # Calculate overlap
+        skill_overlap = len(subqueen_skills.intersection(required_skills))
+        skill_match = skill_overlap / len(required_skills)
+        
+        return skill_match
+    
+    async def _distribute_to_subqueens_with_fallback(self, task_nodes: List[TaskNode], request_id: str):
+        """Distribute tasks to Sub-Queens with fallback mechanisms"""
+        successful_assignments = []
+        failed_assignments = []
+        
+        for task_node in task_nodes:
+            success = False
+            attempts = 0
+            max_attempts = min(3, len(self.sub_queen_agents))  # Try up to 3 Sub-Queens
+            
+            while not success and attempts < max_attempts:
+                attempts += 1
+                
+                # Get best available Sub-Queen
+                best_subqueen = self._get_best_subqueen_for_task(task_node)
+                
+                if not best_subqueen:
+                    logger.warning(f"Attempt {attempts}: No available Sub-Queen found for task {task_node.id}")
+                    if attempts < max_attempts:
+                        # Wait briefly and try again
+                        await asyncio.sleep(1.0)
+                        # Refresh Sub-Queen availability
+                        self._refresh_subqueen_availability()
+                        continue
+                    else:
+                        break
+                
+                try:
+                    # Assign task to Sub-Queen
+                    await self._assign_task_to_subqueen(best_subqueen, task_node, request_id)
+                    successful_assignments.append((task_node.id, best_subqueen))
+                    success = True
+                    
+                    logger.info(f"✅ Task {task_node.id} assigned to Sub-Queen {best_subqueen} (attempt {attempts})")
+                    
+                except Exception as e:
+                    logger.warning(f"❌ Failed to assign task {task_node.id} to Sub-Queen {best_subqueen} (attempt {attempts}): {e}")
+                    
+                    # Mark Sub-Queen as temporarily unreliable
+                    if best_subqueen in self.worker_performance:
+                        self.worker_performance[best_subqueen]['reliability_score'] *= 0.8
+                        self.worker_performance[best_subqueen]['current_load'] = max(0, 
+                            self.worker_performance[best_subqueen]['current_load'] - 1)
+                    
+                    if attempts < max_attempts:
+                        await asyncio.sleep(0.5)  # Brief delay before retry
+                        continue
+            
+            if not success:
+                failed_assignments.append(task_node.id)
+                logger.error(f"💥 Failed to assign task {task_node.id} to any Sub-Queen after {attempts} attempts")
+        
+        # Log results
+        logger.info(f"Task distribution results: {len(successful_assignments)} successful, {len(failed_assignments)} failed")
+        
+        # Handle failed assignments
+        if failed_assignments:
+            await self._handle_failed_task_assignments(failed_assignments, request_id)
+        
+        return successful_assignments, failed_assignments
+    
+    def _refresh_subqueen_availability(self):
+        """Refresh availability data for all Sub-Queens"""
+        for subqueen in self.sub_queen_agents:
+            if hasattr(subqueen, 'get_agent_availability_status'):
+                try:
+                    availability = subqueen.get_agent_availability_status()
+                    subqueen_id = subqueen.agent_id
+                    
+                    if subqueen_id in self.worker_performance:
+                        self.worker_performance[subqueen_id].update({
+                            'available_workers': availability.get('available_agents', 0),
+                            'worker_count': availability.get('total_agents', 0),
+                            'utilization_rate': availability.get('utilization_rate', 0.0)
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Could not refresh availability for Sub-Queen {subqueen.agent_id}: {e}")
+    
+    async def _assign_task_to_subqueen(self, subqueen_id: str, task_node: TaskNode, request_id: str):
+        """Assign task to specific Sub-Queen"""
+        enhanced_content = f"""
+        Enhanced Queen Task Assignment
+        Task ID: {task_node.id}
+        Priority: {task_node.priority.name}
+        Estimated Duration: {task_node.estimated_duration}s
+        Required Skills: {', '.join(task_node.required_skills)}
+        Complexity Score: {task_node.metadata.get('complexity_score', 'N/A')}
+        
+        Task Content:
+        {task_node.content}
+        
+        Sub-Queen Instructions:
+        - This task has been optimized for your worker group
+        - Use your enhanced availability checking and load balancing
+        - Implement fallback mechanisms if workers become unavailable
+        - Report back with detailed execution metrics
+        """
+        
+        await self.send_message(subqueen_id, "sub-task-to-subqueen", enhanced_content, request_id)
+        task_node.status = TaskStatus.ASSIGNED
+        task_node.started_at = asyncio.get_event_loop().time()
+        
+        # Track assignment
+        self.active_tasks[task_node.id] = subqueen_id
+    
+    async def _handle_failed_task_assignments(self, failed_task_ids: List[str], request_id: str):
+        """Handle tasks that couldn't be assigned to any Sub-Queen"""
+        if not failed_task_ids:
+            return
+        
+        error_summary = {
+            'failed_tasks': failed_task_ids,
+            'total_failed': len(failed_task_ids),
+            'sub_queen_status': {
+                sq.agent_id: self.worker_performance.get(sq.agent_id, {})
+                for sq in self.sub_queen_agents
+            },
+            'suggested_actions': [
+                'Check Sub-Queen worker availability',
+                'Consider adding more workers to Sub-Queens',
+                'Review task complexity and decomposition',
+                'Check for system resource constraints'
+            ]
+        }
+        
+        await self.send_message("orchestrator", "final-error", 
+                              f"Failed to assign {len(failed_task_ids)} tasks to Sub-Queens: {json.dumps(error_summary)}", 
+                              request_id)
 
     async def _async_ollama_call(self, prompt: str) -> str:
         """Make asynchronous Ollama API call"""
@@ -655,13 +919,18 @@ Required Skills: {', '.join(task_node.required_skills)}
                 
                 logger.info(f"Decomposed into {len(task_nodes)} enhanced tasks with dependencies")
                 
-                # Check if we have drones to distribute to
-                if len(self.drone_agents) > 0:
-                    # Optimal task distribution
+                # Distribution logic based on architecture
+                if self.architecture_type == 'HIERARCHICAL' and len(self.sub_queen_agents) > 0:
+                    # Use enhanced Sub-Queen distribution with fallbacks
+                    logger.info("Using hierarchical distribution with enhanced Sub-Queens")
+                    await self._distribute_to_subqueens_with_fallback(task_nodes, message.request_id)
+                elif len(self.drone_agents) > 0:
+                    # Direct drone distribution for centralized/fully-connected
+                    logger.info("Using direct drone distribution")
                     await self._distribute_tasks_optimally(task_nodes, message.request_id)
                 else:
-                    # No drones available - execute task directly
-                    logger.warning("No drones available, QueenAgent executing task directly")
+                    # No agents available - execute task directly
+                    logger.warning("No agents available, QueenAgent executing task directly")
                     await self._execute_task_directly(message.content, message.request_id)
                 
             except Exception as e:
@@ -838,7 +1107,7 @@ Required Skills: {', '.join(task_node.required_skills)}
                 filename, content = self._extract_simple_file_info(task_content)
                 if filename and content:
                     import os
-                    project_folder = os.getcwd()
+                    project_folder = self.project_folder
                     file_path = os.path.join(project_folder, filename)
                     
                     with open(file_path, 'w', encoding='utf-8') as f:
@@ -868,7 +1137,7 @@ Required Skills: {', '.join(task_node.required_skills)}
             if filename and content:
                 # Create the file in the project directory
                 import os
-                project_folder = os.getcwd()  # Use current working directory
+                project_folder = self.project_folder  # Use configured project folder
                 file_path = os.path.join(project_folder, filename)
                 
                 with open(file_path, 'w', encoding='utf-8') as f:
@@ -982,11 +1251,15 @@ Required Skills: {', '.join(task_node.required_skills)}
         # Also check for "file" keyword
         has_file_word = 'file' in task_lower or 'datei' in task_lower
         
-        # Check for complex project types that should be handled directly
-        complex_projects = ['helm', 'helmchart', 'docker', 'kubernetes', 'k8s']
+        # Check for complex project types that should NOT be handled as simple file creation
+        complex_projects = ['helm', 'helmchart', 'docker', 'kubernetes', 'k8s', 'pentest', 'penetration', 'security', 'tool', 'framework', 'system', 'application', 'app', 'website', 'web']
         has_complex_project = any(project in task_lower for project in complex_projects)
         
-        return has_file_keyword and (has_file_extension or has_filename or has_file_word or has_complex_project)
+        # If it's a complex project, it should NOT be treated as simple file creation
+        if has_complex_project:
+            return False
+            
+        return has_file_keyword and (has_file_extension or has_filename or has_file_word)
     
     def _extract_simple_file_info(self, task_content: str) -> tuple[str, str]:
         """Extract filename and content from simple file creation tasks"""
@@ -1112,7 +1385,7 @@ Required Skills: {', '.join(task_node.required_skills)}
             elif 'apache' in task_content.lower():
                 chart_name = "apache-chart"
             
-            project_folder = os.getcwd()
+            project_folder = self.project_folder
             chart_path = os.path.join(project_folder, chart_name)
             
             # Create chart directory structure
@@ -1345,7 +1618,7 @@ Chart is ready for deployment!"""
         try:
             import os
             
-            project_folder = os.getcwd()
+            project_folder = self.project_folder
             
             # Create Dockerfile
             dockerfile_content = """FROM nginx:alpine

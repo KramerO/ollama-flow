@@ -68,12 +68,20 @@ EXAMPLES:
 RUN OPTIONS:
   --drones N             Number of drone agents (default: 4)
   --arch TYPE            Architecture: HIERARCHICAL, CENTRALIZED, FULLY_CONNECTED  
-  --model NAME           Ollama model ("auto" = intelligent selection, default)
+  --model NAME           Ollama model (uses YAML config priority by default)
   --secure               Enable secure mode (default: true)
   --project-folder PATH  Working directory for agents
   --interactive          Interactive mode
   --metrics              Enable performance metrics
   --benchmark            Benchmark mode
+
+MODEL CONFIGURATION OPTIONS:
+  --show-yaml-config     Show current YAML model configuration
+  --edit-yaml-config     Open models.yaml in editor for customization
+  --validate-yaml-config Validate models.yaml syntax and structure
+  --reset-yaml-config    Reset models.yaml to default configuration
+  --list-models          List available models and role mappings
+  --show-config          Show current model chooser configuration
   
 AUTO-SCALING OPTIONS (NEW):
   --auto-scaling         Enable GPU-based auto-scaling system
@@ -141,16 +149,16 @@ def run_enhanced_main(args):
     # Use enhanced_framework.py which has the latest LLM Chooser integration
     enhanced_framework_path = original_dir / "enhanced_framework.py"
     
-    # Use main.py as primary choice since enhanced_framework has issues
-    main_path = original_dir / "main.py"
-    if main_path.exists():
-        cmd = [sys.executable, str(main_path)]
+    # Use enhanced_main.py as primary choice for latest improvements
+    enhanced_main_path = original_dir / "enhanced_main.py"
+    if enhanced_main_path.exists():
+        cmd = [sys.executable, str(enhanced_main_path)]
         use_enhanced_framework = False
     else:
-        # Try enhanced_main.py
-        enhanced_main_path = original_dir / "enhanced_main.py"
-        if enhanced_main_path.exists():
-            cmd = [sys.executable, str(enhanced_main_path)]
+        # Fallback to main.py
+        main_path = original_dir / "main.py"
+        if main_path.exists():
+            cmd = [sys.executable, str(main_path)]
             use_enhanced_framework = False
         else:
             # Last resort: enhanced_framework.py (has issues)
@@ -190,16 +198,27 @@ def run_enhanced_main(args):
         if hasattr(args, 'docker') and args.docker:
             cmd.append("--docker")
     else:
-        # Legacy main.py parameters - map CLI args to main.py expected parameters
+        # Enhanced main.py parameters (supports all new features)
         if args.task:
             cmd.extend(["--task", args.task])
         if args.drones:
-            cmd.extend(["--drone-count", str(args.drones)])  # main.py expects --drone-count
+            cmd.extend(["--workers", str(args.drones)])  # enhanced_main.py expects --workers
+        if args.sub_queens:
+            cmd.extend(["--sub-queens", str(args.sub_queens)])  # enhanced_main.py supports --sub-queens
         if args.arch:
-            cmd.extend(["--architecture-type", args.arch])  # main.py expects --architecture-type
+            cmd.extend(["--arch", args.arch])  # enhanced_main.py expects --arch
         if args.model and args.model != "auto":
-            cmd.extend(["--ollama-model", args.model])  # main.py expects --ollama-model
-        # Note: main.py doesn't support --secure, --log-level, --interactive, --metrics, --benchmark
+            cmd.extend(["--model", args.model])  # enhanced_main.py expects --model
+        if args.secure:
+            cmd.append("--secure")
+        if args.log_level:
+            cmd.extend(["--log-level", args.log_level])
+        if args.interactive:
+            cmd.append("--interactive")
+        if args.metrics:
+            cmd.append("--metrics")
+        if args.benchmark:
+            cmd.append("--benchmark")
         
         if args.project_folder:
             cmd.extend(["--project-folder", args.project_folder])
@@ -416,6 +435,320 @@ def neural_operations(args):
     except Exception as e:
         print(f"❌ Neural operation failed: {e}")
 
+def interactive_yaml_config(chooser):
+    """Interactive YAML configuration editor"""
+    import yaml
+    
+    print("🎛️  Interactive YAML Model Configuration")
+    print("=" * 50)
+    
+    try:
+        # Load current config
+        with open("models.yaml", 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        print("📝 Creating new models.yaml configuration...")
+        chooser._create_default_yaml_config()
+        with open("models.yaml", 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+    
+    while True:
+        print("\n🎯 What would you like to configure?")
+        print("1. 📋 Reorder model priorities")
+        print("2. 👤 Configure role preferences") 
+        print("3. 📋 Configure task preferences")
+        print("4. ⚙️  Configure settings")
+        print("5. 👀 Show current configuration")
+        print("6. 💾 Save and exit")
+        print("7. ❌ Exit without saving")
+        
+        try:
+            choice = input("\nEnter choice (1-7): ").strip()
+            
+            if choice == '1':
+                config = reorder_model_priorities(config, chooser)
+            elif choice == '2':
+                config = configure_role_preferences(config, chooser)
+            elif choice == '3':
+                config = configure_task_preferences(config)
+            elif choice == '4':
+                config = configure_settings(config)
+            elif choice == '5':
+                show_current_config(config)
+            elif choice == '6':
+                save_yaml_config(config)
+                print("✅ Configuration saved successfully!")
+                break
+            elif choice == '7':
+                print("❌ Exiting without saving changes")
+                break
+            else:
+                print("❌ Invalid choice. Please enter 1-7.")
+                
+        except KeyboardInterrupt:
+            print("\n❌ Configuration cancelled")
+            break
+        except Exception as e:
+            print(f"❌ Error: {e}")
+
+def reorder_model_priorities(config, chooser):
+    """Reorder model priorities interactively"""
+    print("\n📋 Current Model Priority Order:")
+    available_models = chooser.available_models
+    current_order = config.get('allowed_models', [])
+    
+    # Show current models with their status
+    for i, model in enumerate(current_order, 1):
+        status = "✅ Available" if model in available_models else "❌ Not Available"
+        print(f"{i:2}. {model:<20} {status}")
+    
+    print("\n🔄 How would you like to reorder?")
+    print("1. Move model up")
+    print("2. Move model down") 
+    print("3. Remove model")
+    print("4. Add new model")
+    print("5. Back to main menu")
+    
+    try:
+        action = input("Enter choice (1-5): ").strip()
+        
+        if action == '1':  # Move up
+            try:
+                pos = int(input("Enter position of model to move up (1-based): ")) - 1
+                if 0 < pos < len(current_order):
+                    current_order[pos], current_order[pos-1] = current_order[pos-1], current_order[pos]
+                    config['allowed_models'] = current_order
+                    print("✅ Model moved up")
+                else:
+                    print("❌ Invalid position")
+            except ValueError:
+                print("❌ Invalid input")
+        
+        elif action == '2':  # Move down
+            try:
+                pos = int(input("Enter position of model to move down (1-based): ")) - 1
+                if 0 <= pos < len(current_order) - 1:
+                    current_order[pos], current_order[pos+1] = current_order[pos+1], current_order[pos]
+                    config['allowed_models'] = current_order
+                    print("✅ Model moved down")
+                else:
+                    print("❌ Invalid position")
+            except ValueError:
+                print("❌ Invalid input")
+        
+        elif action == '3':  # Remove
+            try:
+                pos = int(input("Enter position of model to remove (1-based): ")) - 1
+                if 0 <= pos < len(current_order):
+                    removed = current_order.pop(pos)
+                    config['allowed_models'] = current_order
+                    print(f"✅ Removed {removed}")
+                else:
+                    print("❌ Invalid position")
+            except ValueError:
+                print("❌ Invalid input")
+        
+        elif action == '4':  # Add new
+            print(f"\n📋 Available models to add:")
+            for i, model in enumerate(available_models, 1):
+                if model not in current_order:
+                    print(f"{i}. {model}")
+            
+            new_model = input("Enter model name to add: ").strip()
+            if new_model in available_models and new_model not in current_order:
+                try:
+                    pos = input("Enter position to insert (1-based, Enter for end): ").strip()
+                    if pos:
+                        pos = int(pos) - 1
+                        current_order.insert(pos, new_model)
+                    else:
+                        current_order.append(new_model)
+                    config['allowed_models'] = current_order
+                    print(f"✅ Added {new_model}")
+                except ValueError:
+                    print("❌ Invalid position")
+            else:
+                print("❌ Model not available or already in list")
+    
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    return config
+
+def configure_role_preferences(config, chooser):
+    """Configure role-specific model preferences"""
+    print("\n👤 Role-Specific Model Preferences:")
+    
+    roles = ['developer', 'security_specialist', 'it_architect', 'analyst', 'datascientist']
+    role_prefs = config.get('role_preferences', {})
+    available_models = config.get('allowed_models', [])
+    
+    print("\nSelect role to configure:")
+    for i, role in enumerate(roles, 1):
+        current = role_prefs.get(role, ['Not configured'])[:3]  # Show first 3
+        print(f"{i}. {role:<20} → {', '.join(current)}")
+    
+    try:
+        choice = int(input("Enter role number (1-5): ")) - 1
+        if 0 <= choice < len(roles):
+            selected_role = roles[choice]
+            print(f"\n🎯 Configuring preferences for: {selected_role}")
+            
+            print(f"Available models: {', '.join(available_models)}")
+            current_prefs = role_prefs.get(selected_role, [])
+            print(f"Current preferences: {', '.join(current_prefs) if current_prefs else 'None'}")
+            
+            new_prefs = input("Enter new preferences (comma-separated, in priority order): ").strip()
+            if new_prefs:
+                new_list = [model.strip() for model in new_prefs.split(',')]
+                # Validate models
+                valid_models = [m for m in new_list if m in available_models]
+                if valid_models:
+                    role_prefs[selected_role] = valid_models
+                    config['role_preferences'] = role_prefs
+                    print(f"✅ Updated {selected_role} preferences: {', '.join(valid_models)}")
+                else:
+                    print("❌ No valid models provided")
+            else:
+                print("❌ No input provided")
+        else:
+            print("❌ Invalid role selection")
+    except ValueError:
+        print("❌ Invalid input")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    return config
+
+def configure_task_preferences(config):
+    """Configure task-specific model preferences"""
+    print("\n📋 Task-Specific Model Preferences:")
+    
+    task_prefs = config.get('task_preferences', {})
+    available_models = config.get('allowed_models', [])
+    
+    print("\nCurrent task preferences:")
+    for task, models in task_prefs.items():
+        print(f"• {task}: {', '.join(models[:3])}")  # Show first 3
+    
+    print(f"\nAvailable models: {', '.join(available_models)}")
+    
+    task_name = input("Enter task name to configure (e.g., 'code_development'): ").strip()
+    if task_name:
+        current = task_prefs.get(task_name, [])
+        print(f"Current preferences for '{task_name}': {', '.join(current) if current else 'None'}")
+        
+        new_prefs = input("Enter new preferences (comma-separated, in priority order): ").strip()
+        if new_prefs:
+            new_list = [model.strip() for model in new_prefs.split(',')]
+            # Validate models
+            valid_models = [m for m in new_list if m in available_models]
+            if valid_models:
+                task_prefs[task_name] = valid_models
+                config['task_preferences'] = task_prefs
+                print(f"✅ Updated '{task_name}' preferences: {', '.join(valid_models)}")
+            else:
+                print("❌ No valid models provided")
+        else:
+            # Remove if empty
+            if task_name in task_prefs:
+                del task_prefs[task_name]
+                config['task_preferences'] = task_prefs
+                print(f"✅ Removed preferences for '{task_name}'")
+    
+    return config
+
+def configure_settings(config):
+    """Configure general settings"""
+    print("\n⚙️  General Settings:")
+    
+    settings = config.get('settings', {})
+    
+    print("\nCurrent settings:")
+    print(f"• auto_download: {settings.get('auto_download', False)}")
+    print(f"• max_model_size_gb: {settings.get('max_model_size_gb', 5.5)}")
+    print(f"• fallback_to_cpu: {settings.get('fallback_to_cpu', True)}")
+    print(f"• retry_attempts: {settings.get('retry_attempts', 3)}")
+    
+    print("\n🎛️  What would you like to change?")
+    print("1. Auto-download models")
+    print("2. Maximum model size")
+    print("3. CPU fallback")
+    print("4. Retry attempts")
+    print("5. Back to main menu")
+    
+    try:
+        choice = input("Enter choice (1-5): ").strip()
+        
+        if choice == '1':
+            auto_dl = input("Enable auto-download? (y/n): ").lower().startswith('y')
+            settings['auto_download'] = auto_dl
+            print(f"✅ Auto-download set to: {auto_dl}")
+        
+        elif choice == '2':
+            try:
+                max_size = float(input("Maximum model size in GB (e.g., 5.5): "))
+                settings['max_model_size_gb'] = max_size
+                print(f"✅ Maximum size set to: {max_size}GB")
+            except ValueError:
+                print("❌ Invalid size value")
+        
+        elif choice == '3':
+            cpu_fallback = input("Enable CPU fallback? (y/n): ").lower().startswith('y')
+            settings['fallback_to_cpu'] = cpu_fallback
+            print(f"✅ CPU fallback set to: {cpu_fallback}")
+        
+        elif choice == '4':
+            try:
+                retry = int(input("Number of retry attempts (e.g., 3): "))
+                settings['retry_attempts'] = retry
+                print(f"✅ Retry attempts set to: {retry}")
+            except ValueError:
+                print("❌ Invalid retry value")
+        
+        config['settings'] = settings
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    return config
+
+def show_current_config(config):
+    """Show current configuration"""
+    print("\n👀 Current Configuration:")
+    print("=" * 40)
+    
+    # Allowed models
+    print("\n📋 Model Priority Order:")
+    for i, model in enumerate(config.get('allowed_models', []), 1):
+        print(f"{i:2}. {model}")
+    
+    # Role preferences
+    print("\n👤 Role Preferences:")
+    for role, models in config.get('role_preferences', {}).items():
+        print(f"• {role:<20}: {', '.join(models[:3])}")
+    
+    # Task preferences
+    print("\n📋 Task Preferences:")
+    for task, models in config.get('task_preferences', {}).items():
+        print(f"• {task:<20}: {', '.join(models[:3])}")
+    
+    # Settings
+    print("\n⚙️  Settings:")
+    settings = config.get('settings', {})
+    for key, value in settings.items():
+        print(f"• {key:<20}: {value}")
+
+def save_yaml_config(config):
+    """Save YAML configuration to file"""
+    try:
+        import yaml
+        with open("models.yaml", 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, default_flow_style=False, indent=2, sort_keys=False)
+        print("💾 Configuration saved to models.yaml")
+    except Exception as e:
+        print(f"❌ Error saving configuration: {e}")
+
 def model_operations(args):
     """Handle LLM model management operations"""
     try:
@@ -446,7 +779,65 @@ def model_operations(args):
                         fallbacks = config.get('fallback', [])
                         print(f"  • {role.upper()}: {primary} (fallback: {', '.join(fallbacks)})")
                 
-                elif args.models_command == "show":
+                # YAML Configuration Commands
+                elif args.models_command == "show-yaml":
+                    print("📋 Current YAML Model Configuration:")
+                    print("=" * 50)
+                    try:
+                        with open("models.yaml", 'r', encoding='utf-8') as f:
+                            yaml_content = f.read()
+                        print(yaml_content)
+                    except FileNotFoundError:
+                        print("❌ models.yaml not found. Run 'ollama-flow models reset-yaml' to create it.")
+                    except Exception as e:
+                        print(f"❌ Error reading models.yaml: {e}")
+                
+                elif args.models_command == "edit-yaml":
+                    import subprocess
+                    import os
+                    print("📝 Opening models.yaml in editor...")
+                    try:
+                        editor = getattr(args, 'editor', None) or os.environ.get('EDITOR', 'nano')
+                        subprocess.run([editor, 'models.yaml'])
+                        print("✅ YAML configuration editing complete!")
+                    except Exception as e:
+                        print(f"❌ Error opening editor: {e}")
+                        print(f"💡 Try editing models.yaml manually with your preferred editor")
+                
+                elif args.models_command == "validate-yaml":
+                    print("🔍 Validating YAML model configuration...")
+                    try:
+                        import yaml
+                        with open("models.yaml", 'r', encoding='utf-8') as f:
+                            yaml_config = yaml.safe_load(f)
+                        
+                        # Basic validation
+                        required_keys = ['allowed_models', 'role_preferences', 'task_preferences']
+                        missing_keys = [key for key in required_keys if key not in yaml_config]
+                        
+                        if missing_keys:
+                            print(f"⚠️ Missing required keys: {missing_keys}")
+                        else:
+                            print("✅ YAML configuration is valid!")
+                            print(f"📋 Found {len(yaml_config.get('allowed_models', []))} allowed models")
+                            print(f"👤 Found {len(yaml_config.get('role_preferences', {}))} role preferences")
+                            print(f"📋 Found {len(yaml_config.get('task_preferences', {}))} task preferences")
+                    except FileNotFoundError:
+                        print("❌ models.yaml not found. Run 'ollama-flow models reset-yaml' to create it.")
+                    except Exception as e:
+                        print(f"❌ Validation error: {e}")
+                
+                elif args.models_command == "configure-yaml":
+                    interactive_yaml_config(chooser)
+                
+                elif args.models_command == "reset-yaml":
+                    print("🔄 Resetting YAML model configuration to defaults...")
+                    chooser._create_default_yaml_config()
+                    print("✅ YAML configuration reset complete!")
+                    print("📝 Edit models.yaml to customize your model priorities")
+                
+                # Legacy JSON Configuration Commands  
+                elif args.models_command == "show-config":
                     print("⚙️  Current LLM Chooser Configuration:")
                     print("=" * 40)
                     print(f"Default Model: {chooser.default_model}")
@@ -732,6 +1123,7 @@ def main():
     run_parser = subparsers.add_parser('run', help='Execute a task with AI agents')
     run_parser.add_argument('task', help='Task description')
     run_parser.add_argument('--drones', type=int, default=4, help='Number of drone agents')
+    run_parser.add_argument('--sub-queens', type=int, default=2, help='Number of sub-queen agents for hierarchical mode')
     run_parser.add_argument('--arch', choices=['HIERARCHICAL', 'CENTRALIZED', 'FULLY_CONNECTED'],
                            default='HIERARCHICAL', help='Architecture type')
     run_parser.add_argument('--model', default='llama3:latest', help='Ollama model (available: llama3:latest, codellama:7b)')
@@ -767,11 +1159,12 @@ def main():
                                 help='Session operation')
     sessions_parser.add_argument('session_id', nargs='?', help='Session ID (for show/resume/delete)')
     
-    # Models command
-    models_parser = subparsers.add_parser('models', help='LLM model management')
-    models_parser.add_argument('models_command', choices=['list', 'show', 'config', 'reset'],
-                              help='Models operation')
-    models_parser.add_argument('role_model', nargs='?', help='Role:model mapping (for config command, e.g., developer:codegemma:7b)')
+    # Models command (enhanced with YAML support)
+    models_parser = subparsers.add_parser('models', help='LLM model management and YAML configuration')
+    models_parser.add_argument('models_command', choices=['show-yaml', 'edit-yaml', 'configure-yaml', 'validate-yaml', 'reset-yaml', 'list', 'show-config', 'config', 'reset'],
+                              help='Model management operation')
+    models_parser.add_argument('role_model', nargs='?', help='Role:model mapping (for config command, e.g., developer:phi3:latest)')
+    models_parser.add_argument('--editor', help='Editor to use for editing YAML config')
     
     # Neural command
     neural_parser = subparsers.add_parser('neural', help='Neural intelligence operations')
