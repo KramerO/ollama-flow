@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import concurrent.futures
 
 from agents.base_agent import BaseAgent, AgentMessage
-from agents.secure_worker_agent import SecureWorkerAgent
+from agents.secure_drone_agent import SecureDroneAgent
 from agents.enhanced_queen_agent import TaskNode, TaskPriority, TaskStatus
 
 # Configure logging
@@ -19,7 +19,7 @@ class EnhancedSubQueenAgent(BaseAgent):
     def __init__(self, agent_id: str, name: str, model: str = "llama3"):
         super().__init__(agent_id, name)
         self.model = model
-        self.group_worker_agents: List[SecureWorkerAgent] = []
+        self.group_worker_agents: List[SecureDroneAgent] = []
         
         # Enhanced task management
         self.task_queue: List[TaskNode] = []
@@ -37,7 +37,7 @@ class EnhancedSubQueenAgent(BaseAgent):
         self.current_request_id: Optional[str] = None
         self.parent_queen_id: Optional[str] = None
 
-    def initialize_group_agents(self, agents: List[SecureWorkerAgent]):
+    def initialize_group_agents(self, agents: List[SecureDroneAgent]):
         """Initialize drone agents with performance tracking"""
         self.group_worker_agents = agents
         logger.info(f"SubQueenAgent {self.name} initialized with {len(agents)} DroneAgents.")

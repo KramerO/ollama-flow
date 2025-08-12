@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 import tempfile
 import json
-from enum import Enum
 
 from agents.base_agent import BaseAgent, AgentMessage
 
@@ -16,15 +15,8 @@ from agents.base_agent import BaseAgent, AgentMessage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class DroneRole(Enum):
-    """Different roles a drone can take"""
-    ANALYST = "analyst"
-    DATA_SCIENTIST = "datascientist"
-    IT_ARCHITECT = "it_architect"
-    DEVELOPER = "developer"
-
 class SecureDroneAgent(BaseAgent):
-    """Enhanced Drone Agent with security controls, sandboxing, and role-based capabilities"""
+    """Enhanced Drone Agent with security controls and sandboxing"""
     
     # Command whitelist - only these commands are allowed
     ALLOWED_COMMANDS = {
@@ -70,17 +62,13 @@ class SecureDroneAgent(BaseAgent):
         '.sql', '.sh', '.bash', '.dockerfile', '.gitignore', '.env.example'
     }
     
-    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None, role: DroneRole = DroneRole.DEVELOPER):
+    def __init__(self, agent_id: str, name: str, model: str = "llama3", project_folder_path: Optional[str] = None):
         super().__init__(agent_id, name)
         self.model = model
         self.project_folder_path = self._validate_project_folder(project_folder_path)
         self.sandbox_enabled = True
         self.max_execution_time = 30  # seconds
         self.max_output_size = 10000  # characters
-        
-        # Role-specific attributes
-        self.role = role
-        self.capabilities = self._get_role_capabilities()
         
         # Security metrics
         self.blocked_commands = 0
@@ -126,8 +114,17 @@ class SecureDroneAgent(BaseAgent):
     async def _perform_task_with_ollama(self, prompt: str) -> str:
         """Perform task using Ollama with timeout and error handling"""
         try:
-            # Add role-specific security context to prompt
-            enhanced_prompt = self._get_role_specific_security_prompt(prompt)
+            # Add security context to prompt
+            enhanced_prompt = f"""
+            {prompt}
+            
+            SECURITY GUIDELINES:
+            1. Only suggest safe commands from the whitelist
+            2. Avoid any system-level modifications
+            3. Work within the project directory only
+            4. Be cautious with file operations
+            5. Explain your reasoning for any suggested commands
+            """
             
             # Create async subprocess for ollama call
             process = await asyncio.create_subprocess_exec(
@@ -217,7 +214,7 @@ class SecureDroneAgent(BaseAgent):
 
     async def _run_command_securely(self, command: str) -> str:
         """Execute command with security controls and sandboxing"""
-        logger.info(f"[SecureDrone {self.name} ({self.role.value})] Validating command: {command}")
+        logger.info(f"[SecureDrone {self.name}] Validating command: {command}")
         
         # Validate command
         is_valid, validation_message = self._validate_command(command)
@@ -268,7 +265,7 @@ class SecureDroneAgent(BaseAgent):
                 output += f"Exit code: {process.returncode}\n"
                 
             self.executed_commands += 1
-            logger.info(f"[SecureDrone {self.name} ({self.role.value})] Command executed successfully")
+            logger.info(f"[SecureDrone {self.name}] Command executed successfully")
             
             return output.strip() if output else "Command completed successfully"
             
@@ -434,7 +431,7 @@ class SecureDroneAgent(BaseAgent):
         start_time = asyncio.get_event_loop().time()
         
         try:
-            logger.info(f"SecureDrone {self.name} ({self.role.value}) received task: {message.content[:100]}...")
+            logger.info(f"SecureDrone {self.name} received task: {message.content[:100]}...")
             
             # Enhanced task processing with security context
             result = await self._perform_task_with_ollama(message.content)
@@ -462,14 +459,10 @@ class SecureDroneAgent(BaseAgent):
             duration = asyncio.get_event_loop().time() - start_time
             self._record_task_metrics(message.content, final_response, duration, True)
             
-            # Add role information to response
-            role_info = f"\n[Completed by secure {self.role.value} drone: {self.name}]"
-            final_response += role_info
-            
             # Send response
             await self.send_message(message.sender_id, "response", final_response, message.request_id)
             
-            logger.info(f"SecureDrone {self.name} ({self.role.value}) completed task successfully")
+            logger.info(f"SecureDrone {self.name} completed task successfully")
             
         except Exception as e:
             # Record failure metrics
@@ -477,7 +470,7 @@ class SecureDroneAgent(BaseAgent):
             error_msg = f"Task execution failed: {e}"
             self._record_task_metrics(message.content, error_msg, duration, False)
             
-            logger.error(f"SecureDrone {self.name} ({self.role.value}) task failed: {e}")
+            logger.error(f"SecureDrone {self.name} task failed: {e}")
             await self.send_message(message.sender_id, "error", error_msg, message.request_id)
 
     def get_security_summary(self) -> Dict[str, Any]:
@@ -493,125 +486,5 @@ class SecureDroneAgent(BaseAgent):
             ],
             'task_history_count': len(self.task_history),
             'project_folder': self.project_folder_path,
-            'sandbox_enabled': self.sandbox_enabled,
-            'role': self.role.value,
-            'capabilities': self.capabilities
+            'sandbox_enabled': self.sandbox_enabled
         }
-
-    def _get_role_capabilities(self) -> List[str]:
-        """Get capabilities based on drone role"""
-        capabilities_map = {
-            DroneRole.ANALYST: [
-                "data_analysis", "report_generation", "pattern_recognition",
-                "statistical_analysis", "visualization", "documentation"
-            ],
-            DroneRole.DATA_SCIENTIST: [
-                "machine_learning", "data_preprocessing", "model_training",
-                "feature_engineering", "statistical_modeling", "python_analysis"
-            ],
-            DroneRole.IT_ARCHITECT: [
-                "system_design", "infrastructure_planning", "scalability_design",
-                "security_architecture", "technology_selection", "diagram_creation"
-            ],
-            DroneRole.DEVELOPER: [
-                "coding", "debugging", "testing", "deployment",
-                "version_control", "code_review", "problem_solving"
-            ]
-        }
-        return capabilities_map.get(self.role, [])
-
-    def _get_role_specific_security_prompt(self, prompt: str) -> str:
-        """Get role-specific enhanced prompt with security guidelines"""
-        role_contexts = {
-            DroneRole.ANALYST: f"""
-You are a SECURE ANALYST drone. Your role focuses on data analysis and reporting.
-
-Core competencies:
-- Data analysis and interpretation with security awareness
-- Report generation following security best practices  
-- Pattern recognition in secure environments
-- Statistical analysis with data protection
-- Secure visualization and documentation
-
-Task: {prompt}
-
-As a secure analyst, ensure:
-1. No sensitive data exposure in outputs
-2. Use only approved analytical tools
-3. Follow data privacy guidelines
-4. Document security considerations in analysis
-""",
-            DroneRole.DATA_SCIENTIST: f"""
-You are a SECURE DATA SCIENTIST drone. Your role focuses on machine learning and data science.
-
-Core competencies:
-- Secure machine learning workflows
-- Privacy-preserving data preprocessing
-- Model training with security controls
-- Secure feature engineering practices
-- Protected statistical modeling
-
-Task: {prompt}
-
-As a secure data scientist, ensure:
-1. Data anonymization and privacy protection
-2. Secure model training practices
-3. No unauthorized data access
-4. Compliance with data governance policies
-""",
-            DroneRole.IT_ARCHITECT: f"""
-You are a SECURE IT ARCHITECT drone. Your role focuses on secure system design.
-
-Core competencies:
-- Security-first architecture design
-- Threat modeling and risk assessment
-- Secure infrastructure planning
-- Compliance and governance frameworks
-- Security pattern implementation
-
-Task: {prompt}
-
-As a secure IT architect, ensure:
-1. Security by design principles
-2. Threat model considerations
-3. Compliance requirements integration
-4. Secure communication protocols
-5. Access control and authentication design
-""",
-            DroneRole.DEVELOPER: f"""
-You are a SECURE DEVELOPER drone. Your role focuses on secure software development.
-
-Core competencies:
-- Secure coding practices
-- Vulnerability assessment and mitigation
-- Security testing and validation
-- Code review with security focus
-- Secure deployment practices
-
-Task: {prompt}
-
-As a secure developer, ensure:
-1. Input validation and sanitization
-2. Secure authentication and authorization
-3. Protection against common vulnerabilities
-4. Secure error handling
-5. Safe configuration management
-"""
-        }
-        
-        base_context = role_contexts.get(self.role, f"Task: {prompt}")
-        
-        return base_context + f"""
-
-SECURITY GUIDELINES FOR ALL ROLES:
-1. Only suggest safe commands from the whitelist
-2. Avoid any system-level modifications
-3. Work within the project directory only
-4. Be cautious with file operations
-5. Explain your reasoning for any suggested commands
-6. Follow principle of least privilege
-7. Validate all inputs and outputs
-8. Report any security concerns immediately
-
-Your capabilities: {', '.join(self.capabilities)}
-"""

@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from orchestrator.orchestrator import Orchestrator
 from agents.enhanced_queen_agent import EnhancedQueenAgent
 from agents.enhanced_sub_queen_agent import EnhancedSubQueenAgent
-from agents.secure_worker_agent import SecureWorkerAgent
+from agents.secure_drone_agent import SecureDroneAgent
 from db_manager import MessageDBManager
 from neural_intelligence import NeuralIntelligenceEngine
 from mcp_tools import MCPToolsManager
@@ -61,8 +61,8 @@ class EnhancedOllamaFlow:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
 Examples:
-  %(prog)s --task "Build a web scraper" --workers 4 --arch HIERARCHICAL
-  %(prog)s --task "Analyze data file" --workers 2 --arch CENTRALIZED --secure
+  %(prog)s --task "Build a web scraper" --drones 4 --arch HIERARCHICAL
+  %(prog)s --task "Analyze data file" --drones 2 --arch CENTRALIZED --secure
   %(prog)s --interactive --project-folder ./my_project
             """
         )
@@ -94,9 +94,9 @@ Examples:
         
         # Agent configuration
         parser.add_argument(
-            "--workers", "--worker-count",
+            "--drones", "--drone-count",
             type=int,
-            help="Number of worker agents (default: from env or 4)"
+            help="Number of drone agents (default: from env or 4)"
         )
         
         parser.add_argument(
@@ -184,7 +184,7 @@ Examples:
         """Load configuration from environment and arguments"""
         config = {
             # Drone configuration  
-            'worker_count': args.workers or int(os.getenv("OLLAMA_DRONE_COUNT", "4")),
+            'drone_count': args.drones or int(os.getenv("OLLAMA_DRONE_COUNT", "4")),
             'sub_queen_count': args.sub_queens or int(os.getenv("OLLAMA_SUB_QUEEN_COUNT", "2")),
             'architecture_type': args.arch or os.getenv("OLLAMA_ARCHITECTURE_TYPE", "HIERARCHICAL"),
             
@@ -216,8 +216,8 @@ Examples:
         }
         
         # Validate configuration
-        if config['worker_count'] <= 0:
-            config['worker_count'] = 4
+        if config['drone_count'] <= 0:
+            config['drone_count'] = 4
             
         if config['sub_queen_count'] <= 0:
             config['sub_queen_count'] = 2
@@ -270,7 +270,7 @@ Examples:
         agents_info = {
             'queen': None,
             'sub_queens': [],
-            'workers': [],
+            'drones': [],
             'total_agents': 0
         }
         
@@ -289,9 +289,9 @@ Examples:
             
             # Create Drone Agents (Secure or Standard)
             drone_agents = []
-            DroneClass = SecureWorkerAgent if self.config['secure_mode'] else SecureWorkerAgent  # Always use secure
+            DroneClass = SecureDroneAgent if self.config['secure_mode'] else SecureDroneAgent  # Always use secure
             
-            for i in range(self.config['worker_count']):
+            for i in range(self.config['drone_count']):
                 drone = DroneClass(
                     agent_id=f"secure-drone-{i+1}",
                     name=f"Secure Drone {i+1}",
@@ -353,7 +353,7 @@ Examples:
             print("🚀 Enhanced Ollama Flow Framework")
             print("="*60)
             print(f"Architecture: {self.config['architecture_type']}")
-            print(f"Workers: {self.config['worker_count']}")
+            print(f"Drones: {self.config['drone_count']}")
             print(f"Model: {self.config['model']}")
             print(f"Secure Mode: {'✓' if self.config['secure_mode'] else '✗'}")
             if self.config['project_folder']:
@@ -716,7 +716,7 @@ Examples:
                     print(f"Total Agents: {agents_info['total_agents']}")
                     print(f"Queen: {'✓' if agents_info['queen'] else '✗'}")
                     print(f"Sub-Queens: {len(agents_info['sub_queens'])}")
-                    print(f"Workers: {len(agents_info['workers'])}")
+                    print(f"Drones: {len(agents_info['drones'])}")
                     print(f"Architecture: {self.config['architecture_type']}")
                     print(f"Model: {self.config['model']}")
                     print(f"Secure Mode: {'✓' if self.config['secure_mode'] else '✗'}")

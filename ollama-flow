@@ -192,7 +192,7 @@ def run_enhanced_main(args):
         if args.task:
             cmd.extend(["--task", args.task])
         if args.drones:
-            cmd.extend(["--workers", str(args.drones)])  # enhanced_main.py expects --workers
+            cmd.extend(["--drones", str(args.drones)])  # enhanced_main.py expects --drones
         if args.sub_queens:
             cmd.extend(["--sub-queens", str(args.sub_queens)])  # enhanced_main.py supports --sub-queens
         if args.arch:

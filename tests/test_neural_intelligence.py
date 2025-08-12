@@ -105,7 +105,7 @@ class TestCognitiveModel(unittest.TestCase):
         high_success_pattern = NeuralPattern(
             pattern_id="high-success",
             pattern_type="optimization",
-            pattern_data={"workers": 8, "architecture": "HIERARCHICAL"},
+            pattern_data={"drones": 8, "architecture": "HIERARCHICAL"},
             confidence=0.9,
             success_rate=0.95,
             usage_count=10,
@@ -116,7 +116,7 @@ class TestCognitiveModel(unittest.TestCase):
         low_success_pattern = NeuralPattern(
             pattern_id="low-success",
             pattern_type="optimization",
-            pattern_data={"workers": 2, "architecture": "CENTRALIZED"},
+            pattern_data={"drones": 2, "architecture": "CENTRALIZED"},
             confidence=0.7,
             success_rate=0.6,
             usage_count=5,
@@ -127,14 +127,14 @@ class TestCognitiveModel(unittest.TestCase):
         self.model.add_pattern(high_success_pattern)
         self.model.add_pattern(low_success_pattern)
         
-        context = {"task_type": "complex", "workers": 4}
+        context = {"task_type": "complex", "drones": 4}
         recommendations = self.model.get_recommendations(context)
         
         self.assertIsInstance(recommendations, list)
         self.assertGreater(len(recommendations), 0)
         
         # Should recommend the high-success pattern first
-        self.assertIn("8 workers", recommendations[0])
+        self.assertIn("8 drones", recommendations[0])
 
 class TestNeuralIntelligenceEngine(unittest.TestCase):
     """Test cases for Neural Intelligence Engine"""
@@ -286,7 +286,7 @@ class TestNeuralIntelligenceEngine(unittest.TestCase):
                 "agents_info": {
                     "total_agents": 6,
                     "queens": [{"id": "queen-1"}],
-                    "workers": [{"id": f"worker-{i}"} for i in range(4)]
+                    "drones": [{"id": f"worker-{i}"} for i in range(4)]
                 }
             }
             
@@ -318,7 +318,7 @@ class TestNeuralIntelligenceEngine(unittest.TestCase):
                 NeuralPattern(
                     pattern_id=f"analysis-{i}",
                     pattern_type="task_decomposition",
-                    pattern_data={"complexity": i + 1, "workers": (i + 1) * 2},
+                    pattern_data={"complexity": i + 1, "drones": (i + 1) * 2},
                     confidence=0.8 + i * 0.05,
                     success_rate=0.85 + i * 0.03,
                     usage_count=i + 1,
@@ -539,7 +539,7 @@ class TestNeuralIntelligenceIntegration(unittest.TestCase):
             analysis_context = {
                 "task_type": "web_development",
                 "complexity": 3,
-                "workers_available": 6
+                "drones_available": 6
             }
             
             insights = await engine.analyze_with_cognitive_models(analysis_context)

@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from agents.secure_worker_agent import SecureWorkerAgent
+from agents.secure_drone_agent import SecureDroneAgent
 from agents.enhanced_queen_agent import EnhancedQueenAgent
 from agents.enhanced_sub_queen_agent import EnhancedSubQueenAgent
 from enhanced_db_manager import EnhancedDBManager
