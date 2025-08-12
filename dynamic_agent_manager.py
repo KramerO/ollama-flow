@@ -12,9 +12,9 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from agents.drone_agent import DroneAgent, DroneRole
-from agents.queen_agent import QueenAgent
-from agents.sub_queen_agent import SubQueenAgent
+from agents.secure_worker_agent import SecureWorkerAgent
+from agents.enhanced_queen_agent import EnhancedQueenAgent
+from agents.enhanced_sub_queen_agent import EnhancedSubQueenAgent
 from enhanced_db_manager import EnhancedDBManager
 from orchestrator.orchestrator import Orchestrator
 

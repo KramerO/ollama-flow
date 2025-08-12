@@ -149,25 +149,15 @@ def run_enhanced_main(args):
     # Use enhanced_framework.py which has the latest LLM Chooser integration
     enhanced_framework_path = original_dir / "enhanced_framework.py"
     
-    # Use enhanced_main.py as primary choice for latest improvements
+    # Use enhanced_main.py as the only option
     enhanced_main_path = original_dir / "enhanced_main.py"
     if enhanced_main_path.exists():
         cmd = [sys.executable, str(enhanced_main_path)]
         use_enhanced_framework = False
     else:
-        # Fallback to main.py
-        main_path = original_dir / "main.py"
-        if main_path.exists():
-            cmd = [sys.executable, str(main_path)]
-            use_enhanced_framework = False
-        else:
-            # Last resort: enhanced_framework.py (has issues)
-            if enhanced_framework_path.exists():
-                cmd = [sys.executable, str(enhanced_framework_path)]
-                use_enhanced_framework = True
-            else:
-                print("❌ No framework file found. Please check your installation.")
-                sys.exit(1)
+        print("❌ Enhanced main framework not found. Please check your installation.")
+        print("💡 The system now uses only the enhanced framework.")
+        sys.exit(1)
     
     # Add arguments based on which framework is available
     if use_enhanced_framework:

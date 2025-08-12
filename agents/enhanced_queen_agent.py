@@ -8,8 +8,6 @@ from enum import Enum
 import concurrent.futures
 
 from agents.base_agent import BaseAgent, AgentMessage
-from agents.sub_queen_agent import SubQueenAgent
-from agents.drone_agent import DroneAgent, DroneRole
 from agents.secure_drone_agent import SecureDroneAgent
 
 # Configure logging
@@ -61,7 +59,7 @@ class EnhancedQueenAgent(BaseAgent):
         self.project_folder = project_folder or os.getcwd()
         self.sub_queen_agents: List[BaseAgent] = []
         self.drone_agents: List[BaseAgent] = []
-        self.drone_roles: Dict[str, DroneRole] = {}  # agent_id -> role mapping
+        self.drone_roles: Dict[str, DroneRoles] = {}  # agent_id -> role mapping
         
         # Enhanced task management
         self.task_graph: Dict[str, TaskNode] = {}
@@ -83,9 +81,6 @@ class EnhancedQueenAgent(BaseAgent):
                 # Enhanced Sub-Queen discovery and initialization
                 from agents.enhanced_sub_queen_agent import EnhancedSubQueenAgent
                 self.sub_queen_agents = self.orchestrator.get_agents_by_type(EnhancedSubQueenAgent)
-                if not self.sub_queen_agents:
-                    # Fallback to regular SubQueenAgent
-                    self.sub_queen_agents = self.orchestrator.get_agents_by_type(SubQueenAgent)
                 
                 logger.info(f"QueenAgent {self.name} found {len(self.sub_queen_agents)} SubQueenAgents.")
                 
@@ -93,16 +88,14 @@ class EnhancedQueenAgent(BaseAgent):
                 self._initialize_subqueen_performance_tracking()
                 
             elif self.architecture_type in ['CENTRALIZED', 'FULLY_CONNECTED']:
-                # Try SecureDroneAgent first, fallback to DroneAgent
+                # Use only SecureDroneAgent (enhanced version)
                 self.drone_agents = self.orchestrator.get_agents_by_type(SecureDroneAgent)
-                if not self.drone_agents:
-                    self.drone_agents = self.orchestrator.get_agents_by_type(DroneAgent)
-                logger.info(f"QueenAgent {self.name} found {len(self.drone_agents)} DroneAgents.")
+                logger.info(f"QueenAgent {self.name} found {len(self.drone_agents)} SecureDroneAgents.")
                 
                 # Initialize drone performance tracking and roles
                 self._initialize_drone_roles()
                 for drone in self.drone_agents:
-                    role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+                    role = self.drone_roles.get(drone.agent_id, DroneRoles.DEVELOPER)
                     skills = self._get_role_skills(role)
                     self.worker_performance[drone.agent_id] = {
                         'completed_tasks': 0,
@@ -719,7 +712,7 @@ class EnhancedQueenAgent(BaseAgent):
         # Initialize drone performance tracking if missing
         for drone in self.drone_agents:
             if drone.agent_id not in self.worker_performance:
-                role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+                role = self.drone_roles.get(drone.agent_id, DroneRoles.DEVELOPER)
                 skills = self._get_role_skills(role)
                 self.worker_performance[drone.agent_id] = {
                     'completed_tasks': 0,
@@ -738,7 +731,7 @@ class EnhancedQueenAgent(BaseAgent):
         for drone in self.drone_agents:
             drone_id = drone.agent_id
             performance = self.worker_performance[drone_id]
-            drone_role = self.drone_roles.get(drone_id, DroneRole.DEVELOPER)
+            drone_role = self.drone_roles.get(drone_id, DroneRoles.DEVELOPER)
             
             # Role matching bonus
             role_match = 1.0 if drone_role == optimal_role else 0.5
@@ -839,7 +832,7 @@ class EnhancedQueenAgent(BaseAgent):
     async def _assign_task_to_drone(self, drone_id: str, task_node: TaskNode, request_id: str):
         """Assign a specific task to a drone with role-based context"""
         try:
-            drone_role = self.drone_roles.get(drone_id, DroneRole.DEVELOPER)
+            drone_role = self.drone_roles.get(drone_id, DroneRoles.DEVELOPER)
             role_context = self._get_role_context(drone_role)
             
             enhanced_task_content = f"""
@@ -1696,7 +1689,7 @@ Your NGINX server will be available at http://localhost"""
 
     def _initialize_drone_roles(self):
         """Initialize drone roles for available drones"""
-        available_roles = list(DroneRole)
+        available_roles = list(DroneRoles)
         for i, drone in enumerate(self.drone_agents):
             # Assign roles in round-robin fashion initially
             role = available_roles[i % len(available_roles)]
@@ -1708,50 +1701,50 @@ Your NGINX server will be available at http://localhost"""
                 if hasattr(drone, '_get_role_capabilities'):
                     drone.capabilities = drone._get_role_capabilities()
                     
-    def _get_role_skills(self, role: DroneRole) -> List[str]:
+    def _get_role_skills(self, role: str) -> List[str]:
         """Get skills associated with a specific role"""
         role_skills = {
-            DroneRole.ANALYST: [
+            DroneRoles.ANALYST: [
                 "data_analysis", "report_generation", "pattern_recognition",
                 "statistical_analysis", "visualization", "documentation"
             ],
-            DroneRole.DATA_SCIENTIST: [
+            DroneRoles.DATA_SCIENTIST: [
                 "machine_learning", "data_preprocessing", "model_training",
                 "feature_engineering", "statistical_modeling", "python_analysis"
             ],
-            DroneRole.IT_ARCHITECT: [
+            DroneRoles.IT_ARCHITECT: [
                 "system_design", "infrastructure_planning", "scalability_design",
                 "security_architecture", "technology_selection", "diagram_creation"
             ],
-            DroneRole.DEVELOPER: [
+            DroneRoles.DEVELOPER: [
                 "coding", "debugging", "testing", "deployment",
                 "version_control", "code_review", "problem_solving"
             ]
         }
         return role_skills.get(role, ['general'])
         
-    def _determine_task_role(self, task: str) -> DroneRole:
+    def _determine_task_role(self, task: str) -> str:
         """Determine the most appropriate role for a given task"""
         task_lower = task.lower()
         
         # Keywords that suggest specific roles
         role_keywords = {
-            DroneRole.DATA_SCIENTIST: [
+            DroneRoles.DATA_SCIENTIST: [
                 'machine learning', 'ml', 'model', 'train', 'predict', 'dataset',
                 'pandas', 'numpy', 'scikit', 'tensorflow', 'pytorch', 'analysis',
                 'statistics', 'correlation', 'regression', 'classification'
             ],
-            DroneRole.ANALYST: [
+            DroneRoles.ANALYST: [
                 'analyze', 'report', 'document', 'review', 'assess', 'evaluate',
                 'metrics', 'dashboard', 'visualization', 'chart', 'graph',
                 'insights', 'trends', 'patterns', 'summary'
             ],
-            DroneRole.IT_ARCHITECT: [
+            DroneRoles.IT_ARCHITECT: [
                 'architecture', 'design', 'system', 'infrastructure', 'scalability',
                 'microservices', 'api', 'database', 'security', 'deployment',
                 'cloud', 'docker', 'kubernetes', 'architecture'
             ],
-            DroneRole.DEVELOPER: [
+            DroneRoles.DEVELOPER: [
                 'code', 'develop', 'implement', 'build', 'create', 'program',
                 'function', 'class', 'script', 'application', 'web', 'frontend',
                 'backend', 'debug', 'test', 'fix'
@@ -1766,15 +1759,15 @@ Your NGINX server will be available at http://localhost"""
             
         # Return role with highest score, default to DEVELOPER
         best_role = max(role_scores.items(), key=lambda x: x[1])
-        return best_role[0] if best_role[1] > 0 else DroneRole.DEVELOPER
+        return best_role[0] if best_role[1] > 0 else DroneRoles.DEVELOPER
         
-    def _get_role_context(self, role: DroneRole) -> str:
+    def _get_role_context(self, role: str) -> str:
         """Get context description for a specific role"""
         role_contexts = {
-            DroneRole.ANALYST: "Focus on data analysis, pattern recognition, and generating comprehensive reports with actionable insights.",
-            DroneRole.DATA_SCIENTIST: "Focus on machine learning, statistical analysis, data preprocessing, and data-driven insights using scientific methodologies.",
-            DroneRole.IT_ARCHITECT: "Focus on system design, scalability, security architecture, and infrastructure planning with enterprise-grade solutions.",
-            DroneRole.DEVELOPER: "Focus on coding, implementation, testing, and creating functional, maintainable software solutions."
+            DroneRoles.ANALYST: "Focus on data analysis, pattern recognition, and generating comprehensive reports with actionable insights.",
+            DroneRoles.DATA_SCIENTIST: "Focus on machine learning, statistical analysis, data preprocessing, and data-driven insights using scientific methodologies.",
+            DroneRoles.IT_ARCHITECT: "Focus on system design, scalability, security architecture, and infrastructure planning with enterprise-grade solutions.",
+            DroneRoles.DEVELOPER: "Focus on coding, implementation, testing, and creating functional, maintainable software solutions."
         }
         return role_contexts.get(role, "Complete the assigned task with professional expertise.")
         
@@ -1782,7 +1775,7 @@ Your NGINX server will be available at http://localhost"""
         """Get comprehensive status report of all drones and their roles"""
         drone_status = []
         for drone in self.drone_agents:
-            role = self.drone_roles.get(drone.agent_id, DroneRole.DEVELOPER)
+            role = self.drone_roles.get(drone.agent_id, DroneRoles.DEVELOPER)
             performance = self.worker_performance.get(drone.agent_id, {})
             
             drone_status.append({
@@ -1798,7 +1791,7 @@ Your NGINX server will be available at http://localhost"""
             
         return {
             'total_drones': len(self.drone_agents),
-            'role_distribution': {role.value: sum(1 for r in self.drone_roles.values() if r == role) for role in DroneRole},
+            'role_distribution': {role.value: sum(1 for r in self.drone_roles.values() if r == role) for role in DroneRoles},
             'active_tasks': len(self.active_tasks),
             'completed_tasks': len(self.completed_tasks),
             'failed_tasks': len(self.failed_tasks),

@@ -1,8 +1,0 @@
-Python Script Naming Conventions Report
------------------------------------------
-import requests
-import pandas
-import numpy
-import requests
-import pandas
-import numpy
